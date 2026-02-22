@@ -6,6 +6,7 @@ import { Badge, Btn, Card, Empty, Field, FilterPills, Input, Modal, PageHeader, 
 import type { Customer } from '@/types'
 
 const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void }) => {
+  console.log('initial:', initial)
   const [name, setName] = useState(initial?.name ?? '')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [status, setStatus] = useState(initial?.status ?? 'active')
