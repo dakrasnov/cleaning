@@ -1,0 +1,135 @@
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import toast from 'react-hot-toast'
+import { useCustomersStore } from '@/store/customers'
+import { useShiftsStore } from '@/store/shifts'
+import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Select, Textarea } from '@/components/ui'
+import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+
+const NAVY = '#0F2041'
+const MINT = '#00C9A7'
+
+const schema = z.object({
+  name: z.string().min(1, 'Required'),
+  phone: z.string().min(1, 'Required'),
+  status: z.enum(['active', 'inactive']),
+  address: z.string().min(1, 'Required'),
+  google_maps_link: z.string().url().or(z.literal('')),
+  price: z.coerce.number().min(0),
+  comment: z.string(),
+})
+type FormData = z.infer<typeof schema>
+
+export default function CustomerDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { customers, update, remove } = useCustomersStore()
+  const shifts = useShiftsStore(s => s.shifts)
+
+  const customer = customers.find(c => c.id === id)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+
+  if (!customer) return <div className="p-8 text-center text-gray-400">Customer not found</div>
+
+  const allShifts = shifts.filter(s => s.customer_id === id).sort((a, b) => b.date.localeCompare(a.date))
+  const upcoming  = allShifts.filter(s => s.date >= todayStr() && s.status !== 'cancelled').slice(0, 2)
+
+  const EditForm = () => {
+    const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+      resolver: zodResolver(schema), defaultValues: customer,
+    })
+    const onSubmit = async (data: FormData) => {
+      await update(customer.id, data)
+      toast.success('Customer updated')
+      setShowEdit(false)
+    }
+    return (
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Field label="Name *" error={errors.name?.message}><Input {...register('name')} /></Field>
+        <Field label="Phone *" error={errors.phone?.message}><Input {...register('phone')} /></Field>
+        <Field label="Status"><Select {...register('status')}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>
+        <Field label="Address *" error={errors.address?.message}><Input {...register('address')} /></Field>
+        <Field label="Google Maps Link"><Input {...register('google_maps_link')} /></Field>
+        <Field label="Price ($)"><Input type="number" {...register('price')} /></Field>
+        <Field label="Comment"><Textarea {...register('comment')} /></Field>
+        <div className="flex gap-3 mt-2">
+          <Btn variant="secondary" full onClick={() => setShowEdit(false)}>Cancel</Btn>
+          <Btn full>Save Changes</Btn>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <div>
+      <BackBtn onClick={() => navigate('/customers')} />
+      <div className="flex justify-between items-start mb-5">
+        <div>
+          <h2 className="font-heading text-2xl font-bold" style={{ color: NAVY }}>{customer.name}</h2>
+          <Badge status={customer.status} />
+        </div>
+        <div className="flex gap-2">
+          <Btn small variant="secondary" onClick={() => setShowEdit(true)}>Edit</Btn>
+          <Btn small variant="danger" onClick={() => setShowDelete(true)}>Delete</Btn>
+        </div>
+      </div>
+
+      <Card>
+        <div className="grid gap-3">
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Phone</div>
+            <a href={`tel:${customer.phone}`} className="font-semibold no-underline" style={{ color: MINT }}>{customer.phone}</a>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Address</div>
+            <a href={customer.google_maps_link || '#'} target="_blank" rel="noopener noreferrer" className="no-underline" style={{ color: NAVY }}>{customer.address} 📍</a>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Rate</div>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>${customer.price}</span>
+          </div>
+          {customer.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{customer.comment}</p></div>}
+        </div>
+      </Card>
+
+      {upcoming.length > 0 && <>
+        <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Upcoming Shifts</h3>
+        {upcoming.map(s => (
+          <Card key={s.id} style={{ borderLeft: `4px solid ${MINT}` }}>
+            <div className="flex justify-between">
+              <div>
+                <div className="font-semibold">{fmtDate(s.date)}</div>
+                <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+              </div>
+              <Badge status={s.status} />
+            </div>
+          </Card>
+        ))}
+      </>}
+
+      <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Shift History</h3>
+      {allShifts.length === 0
+        ? <p className="text-sm text-gray-400">No shifts yet.</p>
+        : allShifts.map(s => (
+          <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
+            <div className="flex justify-between">
+              <div>
+                <div className="font-semibold">{fmtDate(s.date)}</div>
+                <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+              </div>
+              <Badge status={s.status} />
+            </div>
+          </Card>
+        ))}
+
+      {showEdit && <Modal title="Edit Customer" onClose={() => setShowEdit(false)}><EditForm /></Modal>}
+      {showDelete && <ConfirmSheet msg="Delete this customer? This cannot be undone."
+        onConfirm={async () => { await remove(customer.id); toast.success('Customer deleted'); navigate('/customers') }}
+        onCancel={() => setShowDelete(false)} />}
+    </div>
+  )
+}

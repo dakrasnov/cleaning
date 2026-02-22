@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl shadow-sm p-4 mb-3;
+  }
+
+  .btn-primary {
+    @apply bg-mint text-white font-semibold rounded-xl px-5 py-3 text-sm transition-all active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 text-navy font-semibold rounded-xl px-5 py-3 text-sm transition-all active:scale-95;
+  }
+
+  .input-base {
+    @apply w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-sans
+           focus:outline-none focus:border-mint transition-colors;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+}
+
+/* Smooth slide-up animation for modals */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+.modal-sheet {
+  animation: slideUp 0.25s ease-out;
+}
+
+/* Skeleton loader pulse */
+@keyframes skeleton {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.skeleton {
+  @apply bg-gray-200 rounded-lg;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
