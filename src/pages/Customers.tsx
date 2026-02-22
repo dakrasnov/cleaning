@@ -34,14 +34,13 @@ const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer
       <Field label="Comment"><Textarea value={comment} onChange={e => setComment(e.target.value)} /></Field>
       <div className="flex gap-3 mt-6">
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
-        <Btn full onClick={handleSubmit}>{initial?.id ? 'Update Customer' : 'Add Customer'}</Btn>
+        <Btn full onClick={handleSubmit}>{initial?.id ? 'Update' : 'Add'}</Btn>
       </div>
     </div>
   )
 }
 
 export default function CustomersPage() {
-  const navigate = useNavigate()
   const { customers, loading, create, update } = useCustomersStore()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -58,16 +57,12 @@ export default function CustomersPage() {
       if (result) {
         toast.success('Customer updated')
         setEditingCustomer(null)
-      } else {
-        toast.error('Failed to update customer')
       }
     } else {
       const result = await create(data)
       if (result) {
         toast.success('Customer added')
         setEditingCustomer(null)
-      } else {
-        toast.error('Failed to add customer')
       }
     }
   }
@@ -97,7 +92,6 @@ export default function CustomersPage() {
         <Empty 
           icon="🏠" 
           title="No Customers" 
-          sub="Add your first customer." 
           cta="+ Add Customer" 
           onCta={() => setEditingCustomer({})} 
         />
@@ -108,19 +102,11 @@ export default function CustomersPage() {
           <div className="flex justify-between items-start">
             <div>
               <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{c.name}</div>
-              <a 
-                href={`tel:${c.phone}`} 
-                className="text-sm text-gray-500 no-underline" 
-                onClick={e => e.stopPropagation()}
-              >
-                {c.phone}
-              </a>
+              <div className="text-sm text-gray-500">{c.phone}</div>
             </div>
             <div className="text-right">
               <Badge status={c.status} />
-              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>
-                ${c.price}
-              </div>
+              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>${c.price}</div>
             </div>
           </div>
         </Card>
@@ -131,7 +117,9 @@ export default function CustomersPage() {
           title={('id' in editingCustomer) ? "Edit Customer" : "New Customer"} 
           onClose={() => setEditingCustomer(null)}
         >
+          {/* Добавлен key={editingCustomer.id}, чтобы React пересоздавал форму при смене клиента */}
           <CustomerForm 
+            key={('id' in editingCustomer) ? editingCustomer.id : 'new'}
             initial={editingCustomer} 
             onSave={handleSave} 
             onClose={() => setEditingCustomer(null)} 
