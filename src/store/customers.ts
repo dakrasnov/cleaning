@@ -45,12 +45,14 @@ create: async (data) => {
   },
 
 
-  update: async (id, data) => {
-    const { error } = await supabase.from('customers').update(data).eq('id', id)
-    if (error) { set({ error: error.message }); return }
-    set({ customers: get().customers.map(c => c.id === id ? { ...c, ...data } : c) })
-  },
+update: async (id, data) => {
+  const { error } = await supabase.from('customers').update(data).eq('id', id)
+  if (error) { set({ error: error.message }); return null }
+  set({ customers: get().customers.map(c => c.id === id ? { ...c, ...data } : c) })
+  return true
+},
 
+  
   remove: async (id) => {
     const { error } = await supabase.from('customers').delete().eq('id', id)
     if (error) { set({ error: error.message }); return }
