@@ -8,7 +8,7 @@ interface CustomersState {
   error: string | null
   fetch: () => Promise<void>
   create: (data: Omit<Customer, 'id' | 'created_at'>) => Promise<Customer | null>
-  update: (id: string, data: Partial<Customer>) => Promise<void>
+  update: (id: string, data: Partial<Customer>) => Promise<boolean | null>
   remove: (id: string) => Promise<void>
 }
 
