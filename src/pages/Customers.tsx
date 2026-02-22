@@ -1,24 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { z } from 'zod'
 import { useCustomersStore } from '@/store/customers'
 import { Badge, Btn, Card, Empty, Field, FilterPills, Input, Modal, PageHeader, SearchBar, Select, SkeletonList, Textarea } from '@/components/ui'
 import type { Customer } from '@/types'
 
-const schema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  phone: z.string().min(1, 'Phone is required'),
-  status: z.enum(['active', 'inactive']),
-  address: z.string().min(1, 'Address is required'),
-  google_maps_link: z.string().url('Must be a valid URL').or(z.literal('')),
-  price: z.coerce.number().min(0),
-  comment: z.string(),
-})
-type FormData = z.infer<typeof schema>
-
-
-const CustomerForm = ({ initial, onSave, onClose }: { initial?: any; onSave: (d: any) => void; onClose: () => void }) => {
+const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void }) => {
   const [name, setName] = useState(initial?.name ?? '')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [status, setStatus] = useState(initial?.status ?? 'active')
@@ -32,7 +19,7 @@ const CustomerForm = ({ initial, onSave, onClose }: { initial?: any; onSave: (d:
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       <Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} placeholder="Customer name" /></Field>
       <Field label="Phone"><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555-0000" /></Field>
       <Field label="Status">
@@ -45,63 +32,112 @@ const CustomerForm = ({ initial, onSave, onClose }: { initial?: any; onSave: (d:
       <Field label="Google Maps Link"><Input value={google_maps_link} onChange={e => setMaps(e.target.value)} /></Field>
       <Field label="Price ($)"><Input type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
       <Field label="Comment"><Textarea value={comment} onChange={e => setComment(e.target.value)} /></Field>
-      <div className="flex gap-3 mt-2">
+      <div className="flex gap-3 mt-6">
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
-        <Btn full onClick={handleSubmit}>Add Customer</Btn>
+        <Btn full onClick={handleSubmit}>{initial?.id ? 'Update Customer' : 'Add Customer'}</Btn>
       </div>
     </div>
   )
 }
-
 
 export default function CustomersPage() {
   const navigate = useNavigate()
   const { customers, loading, create, update } = useCustomersStore()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [showForm, setShowForm] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<Customer | Partial<Customer> | null>(null)
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) &&
     (statusFilter === 'all' || c.status === statusFilter)
   )
 
-
-
-   const handleCreate = async (data: any) => {
-     console.log('form data:', data)
-     const result = await create({ ...data, price: Number(data.price) || 0 })
-     if (result) { toast.success('Customer added'); setShowForm(false) }
-     else toast.error('Failed to add customer')
-   }
+  const handleSave = async (data: any) => {
+    if (editingCustomer && 'id' in editingCustomer) {
+      const result = await update(editingCustomer.id, data)
+      if (result) {
+        toast.success('Customer updated')
+        setEditingCustomer(null)
+      } else {
+        toast.error('Failed to update customer')
+      }
+    } else {
+      const result = await create(data)
+      if (result) {
+        toast.success('Customer added')
+        setEditingCustomer(null)
+      } else {
+        toast.error('Failed to add customer')
+      }
+    }
+  }
 
   return (
     <div>
-      <PageHeader title="Customers" action={<Btn small onClick={() => setShowForm(true)}>+ Add</Btn>} />
+      <PageHeader 
+        title="Customers" 
+        action={<Btn small onClick={() => setEditingCustomer({})}>+ Add</Btn>} 
+      />
+      
       <SearchBar value={search} onChange={setSearch} placeholder="Search customers..." />
-      <FilterPills value={statusFilter} onChange={setStatusFilter}
-        options={[{ value: 'all', label: 'All' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+      
+      <FilterPills 
+        value={statusFilter} 
+        onChange={setStatusFilter}
+        options={[
+          { value: 'all', label: 'All' }, 
+          { value: 'active', label: 'Active' }, 
+          { value: 'inactive', label: 'Inactive' }
+        ]} 
+      />
 
       {loading && <SkeletonList />}
-      {!loading && filtered.length === 0 && <Empty icon="🏠" title="No Customers" sub="Add your first customer." cta="+ Add Customer" onCta={() => setShowForm(true)} />}
+      
+      {!loading && filtered.length === 0 && (
+        <Empty 
+          icon="🏠" 
+          title="No Customers" 
+          sub="Add your first customer." 
+          cta="+ Add Customer" 
+          onCta={() => setEditingCustomer({})} 
+        />
+      )}
+      
       {!loading && filtered.map(c => (
-        <Card key={c.id} onClick={() => navigate(`/customers/${c.id}`)}>
+        <Card key={c.id} onClick={() => setEditingCustomer(c)}>
           <div className="flex justify-between items-start">
             <div>
               <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{c.name}</div>
-              <a href={`tel:${c.phone}`} className="text-sm text-gray-500 no-underline" onClick={e => e.stopPropagation()}>{c.phone}</a>
+              <a 
+                href={`tel:${c.phone}`} 
+                className="text-sm text-gray-500 no-underline" 
+                onClick={e => e.stopPropagation()}
+              >
+                {c.phone}
+              </a>
             </div>
             <div className="text-right">
               <Badge status={c.status} />
-              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>${c.price}</div>
+              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>
+                ${c.price}
+              </div>
             </div>
           </div>
         </Card>
       ))}
 
-      {showForm && <Modal title="New Customer" onClose={() => setShowForm(false)}>
-        <CustomerForm onSave={handleCreate} onClose={() => setShowForm(false)} />
-      </Modal>}
+      {editingCustomer && (
+        <Modal 
+          title={('id' in editingCustomer) ? "Edit Customer" : "New Customer"} 
+          onClose={() => setEditingCustomer(null)}
+        >
+          <CustomerForm 
+            initial={editingCustomer} 
+            onSave={handleSave} 
+            onClose={() => setEditingCustomer(null)} 
+          />
+        </Modal>
+      )}
     </div>
   )
 }
