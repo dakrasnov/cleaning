@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import React, { ReactNode } from 'react'
 
 const MINT = '#00C9A7'
 const NAVY = '#0F2041'
@@ -92,21 +92,23 @@ export const Field = ({ label, children, error }: { label: string; children: Rea
 )
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
-export const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input className="input-base" {...props} />
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  (props, ref) => <input className="input-base" ref={ref} {...props} />
 )
 
-export const Textarea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea className="input-base min-h-[80px] resize-y" {...props} />
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  (props, ref) => <textarea className="input-base min-h-[80px] resize-y" ref={ref} {...props} />
 )
 
-export const Select = ({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) => (
-  <select className="input-base appearance-none" style={{
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A5568' stroke-width='2' fill='none'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 12px center',
-    backgroundColor: 'white',
-  }} {...props}>{children}</select>
+export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }>(
+  ({ children, ...props }, ref) => (
+    <select ref={ref} className="input-base appearance-none" style={{
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A5568' stroke-width='2' fill='none'/%3E%3C/svg%3E")`,
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'right 12px center',
+      backgroundColor: 'white',
+    }} {...props}>{children}</select>
+  )
 )
 
 // ─── SEARCH BAR ───────────────────────────────────────────────────────────────

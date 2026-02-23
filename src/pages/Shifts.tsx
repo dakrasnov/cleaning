@@ -15,6 +15,34 @@ import type { Shift } from '@/types'
 const NAVY = '#0F2041'
 const MINT = '#00C9A7'
 
+// 30-min time slots for the full day: 00:00 – 23:30
+const TIME_SLOTS: string[] = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2)
+  const m = i % 2 === 0 ? '00' : '30'
+  return `${String(h).padStart(2, '0')}:${m}`
+})
+
+// Duration options: 0:30 to 12:00
+const DURATIONS: { value: number; label: string }[] = Array.from({ length: 24 }, (_, i) => {
+  const mins = (i + 1) * 30
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return { value: mins, label: `${h}:${String(m).padStart(2, '0')}` }
+})
+
+const addMins = (time: string, mins: number): string => {
+  const [h, m] = time.split(':').map(Number)
+  const total = h * 60 + m + mins
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+const diffMins = (start: string, end: string): number => {
+  if (!start || !end) return 120
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  return Math.max(30, Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 30) * 30)
+}
+
 const schema = z.object({
   customer_id: z.string().min(1, 'Customer is required'),
   date: z.string().min(1, 'Date is required'),
@@ -27,11 +55,28 @@ type FormData = z.infer<typeof schema>
 
 export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<FormData>; onSave: (d: FormData) => void; onClose: () => void }) => {
   const customers = useCustomersStore(s => s.customers)
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const [duration, setDuration] = useState(() =>
+    initial?.time_start && initial?.time_end ? diffMins(initial.time_start, initial.time_end) : 120
+  )
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: 'onSubmit',
-    defaultValues: initial ?? { customer_id: customers[0]?.id ?? '', date: todayStr(), time_start: '09:00', time_end: '11:00', comment: '', status: 'open' },
+    defaultValues: {
+      customer_id: initial?.customer_id ?? (customers[0]?.id ?? ''),
+      date: initial?.date ?? todayStr(),
+      time_start: initial?.time_start ?? '09:00',
+      time_end: initial?.time_end ?? '11:00',
+      comment: initial?.comment ?? '',
+      status: (initial?.status ?? 'open') as FormData['status'],
+    },
   })
+  const timeStart = watch('time_start')
+  const endTime = watch('time_end')
+
+  useEffect(() => {
+    setValue('time_end', addMins(timeStart, duration))
+  }, [timeStart, duration])
+
   return (
     <form onSubmit={handleSubmit(onSave)}>
       <Field label="Customer *" error={errors.customer_id?.message}>
@@ -42,8 +87,19 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
       </Field>
       <Field label="Date *" error={errors.date?.message}><Input type="date" {...register('date')} /></Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Start Time *" error={errors.time_start?.message}><Input type="time" {...register('time_start')} /></Field>
-        <Field label="End Time *" error={errors.time_end?.message}><Input type="time" {...register('time_end')} /></Field>
+        <Field label="Start *" error={errors.time_start?.message}>
+          <Select {...register('time_start')}>
+            {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+          </Select>
+        </Field>
+        <Field label="Duration">
+          <Select value={duration} onChange={e => setDuration(Number(e.target.value))}>
+            {DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </Select>
+        </Field>
+      </div>
+      <div className="text-sm text-gray-500 -mt-2 mb-4">
+        Ends at: <span className="font-semibold" style={{ color: MINT }}>{endTime}</span>
       </div>
       <Field label="Status">
         <Select {...register('status')}>
@@ -55,7 +111,7 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
       <Field label="Comment"><Textarea {...register('comment')} /></Field>
       <div className="flex gap-3 mt-2">
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
-        <Btn full>{initial?.customer_id ? 'Save Changes' : 'Create Shift'}</Btn>
+        <Btn full>{initial?.date ? 'Save Changes' : 'Create Shift'}</Btn>
       </div>
     </form>
   )
@@ -73,6 +129,8 @@ export default function ShiftsPage() {
   const [dateTo, setDateTo] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [telegramShift, setTelegramShift] = useState<Shift | null>(null)
+
+  const customerIdParam = searchParams.get('customer_id') ?? ''
 
   useEffect(() => {
     if (searchParams.get('new') === '1') setShowForm(true)
@@ -147,7 +205,11 @@ export default function ShiftsPage() {
       ))}
 
       {showForm && <Modal title="New Shift" onClose={() => setShowForm(false)}>
-        <ShiftForm onSave={handleCreate} onClose={() => setShowForm(false)} />
+        <ShiftForm
+          onSave={handleCreate}
+          onClose={() => setShowForm(false)}
+          initial={customerIdParam ? { customer_id: customerIdParam } : undefined}
+        />
       </Modal>}
 
       {telegramShift && (() => {

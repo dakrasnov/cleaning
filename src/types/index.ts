@@ -24,7 +24,6 @@ export interface Employee {
   salary: number
   comment: string
   telegram_chat_id: string
-  password: string
   created_at: string
 }
 

@@ -57,7 +57,7 @@ const AdminLayout = () => {
       <header style={{ background: '#0F2041', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 22 }}>🧹</span>
-          <span style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: '#fff', fontSize: 20, fontWeight: 800 }}>CleanShift</span>
+          <span style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: '#fff', fontSize: 20, fontWeight: 800 }}>Achla Bayit</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{user?.email}</span>

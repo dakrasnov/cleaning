@@ -5,8 +5,7 @@ import { useCustomersStore } from '@/store/customers'
 import { Badge, Btn, Card, Empty, Field, FilterPills, Input, Modal, PageHeader, SearchBar, Select, SkeletonList, Textarea } from '@/components/ui'
 import type { Customer } from '@/types'
 
-const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void }) => {
-  console.log('initial:', initial)
+const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void; onCreateShift?: () => void }) => {
   const [name, setName] = useState(initial?.name ?? '')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [status, setStatus] = useState(initial?.status ?? 'active')
@@ -33,7 +32,10 @@ const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer
       <Field label="Google Maps Link"><Input value={google_maps_link} onChange={e => setMaps(e.target.value)} /></Field>
       <Field label="Price ($)"><Input type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
       <Field label="Comment"><Textarea value={comment} onChange={e => setComment(e.target.value)} /></Field>
-      <div className="flex gap-3 mt-6">
+      {initial?.id && onCreateShift && (
+        <Btn full onClick={onCreateShift}>+ Create Shift</Btn>
+      )}
+      <div className="flex gap-3 mt-2">
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
         <Btn full onClick={handleSubmit}>{initial?.id ? 'Update' : 'Add'}</Btn>
       </div>
@@ -42,6 +44,7 @@ const CustomerForm = ({ initial, onSave, onClose }: { initial?: Partial<Customer
 }
 
 export default function CustomersPage() {
+  const navigate = useNavigate()
   const { customers, loading, create, update } = useCustomersStore()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -119,11 +122,15 @@ export default function CustomersPage() {
           onClose={() => setEditingCustomer(null)}
         >
           {/* Добавлен key={editingCustomer.id}, чтобы React пересоздавал форму при смене клиента */}
-          <CustomerForm 
+          <CustomerForm
             key={('id' in editingCustomer) ? editingCustomer.id : 'new'}
-            initial={editingCustomer} 
-            onSave={handleSave} 
-            onClose={() => setEditingCustomer(null)} 
+            initial={editingCustomer}
+            onSave={handleSave}
+            onClose={() => setEditingCustomer(null)}
+            onCreateShift={('id' in editingCustomer) ? () => {
+              setEditingCustomer(null)
+              navigate(`/shifts?new=1&customer_id=${editingCustomer.id}`)
+            } : undefined}
           />
         </Modal>
       )}

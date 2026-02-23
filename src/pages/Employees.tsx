@@ -17,7 +17,6 @@ const schema = z.object({
   salary: z.coerce.number().min(0),
   comment: z.string(),
   telegram_chat_id: z.string(),
-  password: z.string().min(4, 'Min 4 characters'),
 })
 type FormData = z.infer<typeof schema>
 
@@ -25,7 +24,7 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: 'onSubmit',
-    defaultValues: initial ?? { name: '', phone: '', email: '', hire_date: '', status: 'active', salary: 0, comment: '', telegram_chat_id: '', password: '' },
+    defaultValues: initial ?? { name: '', phone: '', email: '', hire_date: '', status: 'active', salary: 0, comment: '', telegram_chat_id: '' },
   })
   return (
     <form onSubmit={handleSubmit(onSave)}>
@@ -42,7 +41,6 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
       </Field>
       <Field label="Monthly Salary ($)"><Input type="number" {...register('salary')} /></Field>
       <Field label="Telegram Chat ID"><Input {...register('telegram_chat_id')} placeholder="e.g. 123456789" /></Field>
-      <Field label="Password *" error={errors.password?.message}><Input type="password" {...register('password')} /></Field>
       <Field label="Comment"><Textarea {...register('comment')} /></Field>
       <div className="flex gap-3 mt-2">
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>

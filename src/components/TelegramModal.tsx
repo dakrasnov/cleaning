@@ -2,7 +2,6 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Modal, Btn } from '@/components/ui'
 import { buildShiftMessage, sendTelegramMessage } from '@/lib/telegram'
-import { fmtTime } from '@/lib/utils'
 import type { Shift, Customer, Employee } from '@/types'
 
 const MINT = '#00C9A7'
@@ -15,6 +14,18 @@ interface Props {
   onClose: () => void
 }
 
+const buildPayload = (emp: Employee | undefined, shift: Shift, customer: Customer) => ({
+  employeeName: emp?.name ?? 'Сотрудник',
+  customerName: customer.name,
+  shiftId: shift.id,
+  address: customer.address,
+  date: shift.date,
+  timeStart: shift.time_start,
+  timeEnd: shift.time_end,
+  price: customer.price,
+  comment: shift.comment,
+})
+
 export default function TelegramModal({ shift, customer, employees, onClose }: Props) {
   const [selected, setSelected] = useState<string[]>([])
   const [sending, setSending] = useState(false)
@@ -23,15 +34,8 @@ export default function TelegramModal({ shift, customer, employees, onClose }: P
   const toggle = (id: string) =>
     setSelected(p => p.includes(id) ? p.filter(x => x !== id) : p.length < 3 ? [...p, id] : p)
 
-  const preview = buildShiftMessage({
-    shiftId: shift.id,
-    address: customer.address,
-    date: shift.date,
-    timeStart: fmtTime(shift.time_start),
-    timeEnd: fmtTime(shift.time_end),
-    price: customer.price,
-    comment: shift.comment,
-  })
+  const previewEmp = selected.length > 0 ? employees.find(e => e.id === selected[0]) : undefined
+  const preview = buildShiftMessage(buildPayload(previewEmp, shift, customer))
 
   const handleSend = async () => {
     if (!selected.length) { toast.error('Select at least one employee'); return }
@@ -40,7 +44,7 @@ export default function TelegramModal({ shift, customer, employees, onClose }: P
     for (const eid of selected) {
       const emp = employees.find(e => e.id === eid)
       if (!emp?.telegram_chat_id) continue
-      const ok = await sendTelegramMessage(emp.telegram_chat_id, preview)
+      const ok = await sendTelegramMessage(emp.telegram_chat_id, buildShiftMessage(buildPayload(emp, shift, customer)))
       if (ok) success++
     }
     setSending(false)

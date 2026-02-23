@@ -29,12 +29,13 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   },
 
   create: async (data) => {
+    const payload = { ...data, hire_date: data.hire_date || null }
     const { data: row, error } = await supabase
       .from('employees')
-      .insert(data)
+      .insert(payload)
       .select()
       .single()
-    if (error) { set({ error: error.message }); return null }
+    if (error) { console.error('Employee create error:', error); set({ error: error.message }); return null }
     set({ employees: [row, ...get().employees] })
     return row
   },
