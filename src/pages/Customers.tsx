@@ -12,10 +12,11 @@ const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: P
   const [address, setAddress] = useState(initial?.address ?? '')
   const [google_maps_link, setMaps] = useState(initial?.google_maps_link ?? '')
   const [price, setPrice] = useState(initial?.price ?? 0)
+  const [overhead, setOverhead] = useState(initial?.overhead ?? 0)
   const [comment, setComment] = useState(initial?.comment ?? '')
 
   const handleSubmit = () => {
-    onSave({ name, phone, status, address, google_maps_link, price: Number(price) || 0, comment })
+    onSave({ name, phone, status, address, google_maps_link, price: Number(price) || 0, overhead: Math.round(Number(overhead) || 0), comment })
   }
 
   return (
@@ -30,7 +31,8 @@ const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: P
       </Field>
       <Field label="Address"><Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Full address" /></Field>
       <Field label="Google Maps Link"><Input value={google_maps_link} onChange={e => setMaps(e.target.value)} /></Field>
-      <Field label="Price ($)"><Input type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
+      <Field label="Price per hour ($)"><Input type="number" value={price} onChange={e => setPrice(e.target.value)} /></Field>
+      <Field label="Overhead ($)"><Input type="number" value={overhead} onChange={e => setOverhead(e.target.value)} /></Field>
       <Field label="Comment"><Textarea value={comment} onChange={e => setComment(e.target.value)} /></Field>
       {initial?.id && onCreateShift && (
         <Btn full onClick={onCreateShift}>+ Create Shift</Btn>
@@ -110,7 +112,7 @@ export default function CustomersPage() {
             </div>
             <div className="text-right">
               <Badge status={c.status} />
-              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>${c.price}</div>
+              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>${c.price}/hr</div>
             </div>
           </div>
         </Card>

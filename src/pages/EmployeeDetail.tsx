@@ -48,8 +48,10 @@ export default function EmployeeDetailPage() {
             <a href={`tel:${employee.phone}`} className="font-semibold no-underline" style={{ color: MINT }}>{employee.phone}</a></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Email</div><span>{employee.email}</span></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hired</div><span>{fmtDate(employee.hire_date)}</span></div>
-          <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Salary</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>${employee.salary}/mo</span></div>
+          <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hourly Salary</div>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>${employee.salary}/hr</span></div>
+          <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Overhead</div>
+            <span className="font-semibold">${employee.overhead}</span></div>
           {employee.telegram_chat_id && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Telegram ID</div><span>{employee.telegram_chat_id}</span></div>}
           {employee.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{employee.comment}</p></div>}
         </div>

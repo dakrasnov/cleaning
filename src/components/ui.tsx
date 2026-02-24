@@ -12,6 +12,8 @@ const statusColors: Record<string, { bg: string; text: string }> = {
   open:      { bg: '#FFF3CD', text: '#9A6700' },
   confirmed: { bg: '#D1FAF3', text: '#00836D' },
   cancelled: { bg: '#FFE4E4', text: '#C0392B' },
+  assigned:  { bg: '#FFF3CD', text: '#9A6700' },
+  completed: { bg: '#DBEAFE', text: '#1E40AF' },
 }
 
 export const Badge = ({ status }: { status: string }) => {

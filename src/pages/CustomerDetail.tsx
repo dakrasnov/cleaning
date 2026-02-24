@@ -19,6 +19,7 @@ const schema = z.object({
   address: z.string().min(1, 'Required'),
   google_maps_link: z.string().url().or(z.literal('')),
   price: z.coerce.number().min(0),
+  overhead: z.coerce.number().int().min(0).default(0),
   comment: z.string(),
 })
 type FormData = z.infer<typeof schema>
@@ -40,7 +41,7 @@ export default function CustomerDetailPage() {
 
   const EditForm = () => {
     const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-      resolver: zodResolver(schema), defaultValues: customer,
+      resolver: zodResolver(schema), defaultValues: { ...customer, overhead: customer.overhead ?? 0 },
     })
     const onSubmit = async (data: FormData) => {
       await update(customer.id, data)
@@ -54,7 +55,8 @@ export default function CustomerDetailPage() {
         <Field label="Status"><Select {...register('status')}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>
         <Field label="Address *" error={errors.address?.message}><Input {...register('address')} /></Field>
         <Field label="Google Maps Link"><Input {...register('google_maps_link')} /></Field>
-        <Field label="Price ($)"><Input type="number" {...register('price')} /></Field>
+        <Field label="Price per hour ($)"><Input type="number" {...register('price')} /></Field>
+        <Field label="Overhead ($)"><Input type="number" {...register('overhead')} /></Field>
         <Field label="Comment"><Textarea {...register('comment')} /></Field>
         <div className="flex gap-3 mt-2">
           <Btn variant="secondary" full onClick={() => setShowEdit(false)}>Cancel</Btn>
@@ -89,8 +91,12 @@ export default function CustomerDetailPage() {
             <a href={customer.google_maps_link || '#'} target="_blank" rel="noopener noreferrer" className="no-underline" style={{ color: NAVY }}>{customer.address} 📍</a>
           </div>
           <div>
-            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Rate</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>${customer.price}</span>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hourly Rate</div>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>${customer.price}/hr</span>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Overhead</div>
+            <span className="font-semibold">${customer.overhead}</span>
           </div>
           {customer.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{customer.comment}</p></div>}
         </div>

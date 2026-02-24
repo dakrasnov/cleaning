@@ -6,9 +6,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
-import { useEmployeesStore } from '@/store/employees'
 import { Badge, Btn, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
-import TelegramModal from '@/components/TelegramModal'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
 import type { Shift } from '@/types'
 
@@ -64,8 +62,8 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
     defaultValues: {
       customer_id: initial?.customer_id ?? (customers[0]?.id ?? ''),
       date: initial?.date ?? todayStr(),
-      time_start: initial?.time_start ?? '09:00',
-      time_end: initial?.time_end ?? '11:00',
+      time_start: (initial?.time_start ?? '09:00').slice(0, 5),
+      time_end: (initial?.time_end ?? '11:00').slice(0, 5),
       comment: initial?.comment ?? '',
       status: (initial?.status ?? 'open') as FormData['status'],
     },
@@ -122,13 +120,11 @@ export default function ShiftsPage() {
   const [searchParams] = useSearchParams()
   const { shifts, loading, create } = useShiftsStore()
   const customers = useCustomersStore(s => s.customers)
-  const employees = useEmployeesStore(s => s.employees)
 
   const [statusFilter, setStatusFilter] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
+  const [dateFrom, setDateFrom] = useState(todayStr)
   const [dateTo, setDateTo] = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [telegramShift, setTelegramShift] = useState<Shift | null>(null)
 
   const customerIdParam = searchParams.get('customer_id') ?? ''
 
@@ -155,7 +151,7 @@ export default function ShiftsPage() {
     if (result) {
       toast.success('Shift created')
       setShowForm(false)
-      setTelegramShift(result)
+      navigate(`/shifts/${result.id}`)
     } else {
       toast.error('Failed to create shift')
     }
@@ -212,11 +208,6 @@ export default function ShiftsPage() {
         />
       </Modal>}
 
-      {telegramShift && (() => {
-        const cust = customers.find(c => c.id === telegramShift.customer_id)
-        if (!cust) return null
-        return <TelegramModal shift={telegramShift} customer={cust} employees={employees} onClose={() => setTelegramShift(null)} />
-      })()}
     </div>
   )
 }

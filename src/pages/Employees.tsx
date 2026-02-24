@@ -15,6 +15,7 @@ const schema = z.object({
   hire_date: z.string(),
   status: z.enum(['active', 'inactive', 'on_leave']),
   salary: z.coerce.number().min(0),
+  overhead: z.coerce.number().int().min(0).default(0),
   comment: z.string(),
   telegram_chat_id: z.string(),
 })
@@ -24,7 +25,9 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: 'onSubmit',
-    defaultValues: initial ?? { name: '', phone: '', email: '', hire_date: '', status: 'active', salary: 0, comment: '', telegram_chat_id: '' },
+    defaultValues: initial
+      ? { ...initial, overhead: initial.overhead ?? 0 }
+      : { name: '', phone: '', email: '', hire_date: '', status: 'active', salary: 0, overhead: 0, comment: '', telegram_chat_id: '' },
   })
   return (
     <form onSubmit={handleSubmit(onSave)}>
@@ -39,7 +42,8 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
           <option value="on_leave">On Leave</option>
         </Select>
       </Field>
-      <Field label="Monthly Salary ($)"><Input type="number" {...register('salary')} /></Field>
+      <Field label="Hourly Salary ($)"><Input type="number" {...register('salary')} /></Field>
+      <Field label="Overhead ($)"><Input type="number" {...register('overhead')} /></Field>
       <Field label="Telegram Chat ID"><Input {...register('telegram_chat_id')} placeholder="e.g. 123456789" /></Field>
       <Field label="Comment"><Textarea {...register('comment')} /></Field>
       <div className="flex gap-3 mt-2">
@@ -91,7 +95,7 @@ export default function EmployeesPage() {
             </div>
             <div className="text-right">
               <Badge status={e.status} />
-              <div className="text-sm text-gray-400 mt-1.5">${e.salary}/mo</div>
+              <div className="text-sm text-gray-400 mt-1.5">${e.salary}/hr</div>
             </div>
           </div>
         </Card>

@@ -1,6 +1,13 @@
 export type CustomerStatus = 'active' | 'inactive'
 export type EmployeeStatus = 'active' | 'inactive' | 'on_leave'
 export type ShiftStatus = 'open' | 'confirmed' | 'cancelled'
+export type AssignmentStatus = 'assigned' | 'confirmed' | 'completed'
+
+export interface PaymentInfo {
+  employee_id: string
+  amount: number
+  paid: boolean
+}
 
 export interface Customer {
   id: string
@@ -10,6 +17,7 @@ export interface Customer {
   address: string
   google_maps_link: string
   price: number
+  overhead: number
   comment: string
   created_at: string
 }
@@ -22,6 +30,7 @@ export interface Employee {
   hire_date: string
   status: EmployeeStatus
   salary: number
+  overhead: number
   comment: string
   telegram_chat_id: string
   created_at: string
@@ -44,6 +53,8 @@ export interface Assignment {
   employee_ids: string[]
   confirmed_by: string | null
   confirmed_at: string | null
+  status: AssignmentStatus
+  payment_info: PaymentInfo[]
   created_at: string
 }
 

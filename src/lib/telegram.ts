@@ -54,6 +54,35 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
   }
 }
 
+export async function sendTelegramWithConfirmation(chatId: string, text: string, assignmentId: string): Promise<boolean> {
+  if (!BOT_TOKEN) {
+    console.warn('No Telegram bot token configured')
+    return false
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text + '\n\n❓ Вы подтверждаете смену?',
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: 'Да ✅', callback_data: `confirm_${assignmentId}` },
+            { text: 'Нет ❌', callback_data: `decline_${assignmentId}` },
+          ]],
+        },
+      }),
+    })
+    const data = await res.json()
+    return data.ok === true
+  } catch (err) {
+    console.error('Telegram send error:', err)
+    return false
+  }
+}
+
 export async function testBotConnection(token: string): Promise<{ ok: boolean; username?: string }> {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/getMe`)

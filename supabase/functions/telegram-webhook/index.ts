@@ -1,8 +1,8 @@
 // supabase/functions/telegram-webhook/index.ts
-// Deploy with: supabase functions deploy telegram-webhook
-// Then register with Telegram:
-//   curl -X POST https://api.telegram.org/bot<TOKEN>/setWebhook \
-//        -d '{"url":"https://<project>.supabase.co/functions/v1/telegram-webhook"}'
+// Deploy:   supabase functions deploy telegram-webhook
+// Secrets:  supabase secrets set TELEGRAM_BOT_TOKEN=<token>
+// Register: curl -X POST https://api.telegram.org/bot<TOKEN>/setWebhook \
+//           -d '{"url":"https://<project-ref>.supabase.co/functions/v1/telegram-webhook"}'
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -14,102 +14,142 @@ const supabase = createClient(
 const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 
 async function sendMessage(chatId: string | number, text: string) {
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text }),
+  })
+  if (!res.ok) {
+    console.error('sendMessage failed:', await res.text())
+  }
+}
+
+async function answerCallbackQuery(queryId: string) {
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: queryId }),
   })
 }
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('OK')
 
-  const body = await req.json()
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return new Response('OK')
+  }
+
+  console.log('Incoming update:', JSON.stringify(body))
+
+  // ─── Inline keyboard callback (Да / Нет buttons) ──────────────────────────
+  const cbq = body?.callback_query
+  if (cbq) {
+    const chatId = cbq.from.id
+    const callbackData: string = cbq.data ?? ''
+
+    // Always answer immediately to remove loading spinner on button
+    await answerCallbackQuery(cbq.id)
+
+    console.log(`callback_query from chatId=${chatId}, data="${callbackData}"`)
+
+    if (callbackData.startsWith('confirm_')) {
+      const assignmentId = callbackData.slice('confirm_'.length)
+      console.log(`Looking up employee for telegram_chat_id=${chatId}`)
+
+      const { data: emps, error: empError } = await supabase
+        .from('employees')
+        .select('id, name')
+        .eq('telegram_chat_id', String(chatId))
+
+      if (empError) {
+        console.error('Employee lookup error:', empError)
+        await sendMessage(chatId, '❌ Ошибка при поиске сотрудника. Попробуйте позже.')
+        return new Response('OK')
+      }
+
+      const employee = emps?.[0]
+      if (!employee) {
+        console.error(`No employee found for telegram_chat_id=${chatId}`)
+        await sendMessage(chatId, `❌ Ваш Telegram (ID: ${chatId}) не привязан ни к одному сотруднику.\n\nПередайте этот ID менеджеру.`)
+        return new Response('OK')
+      }
+
+      console.log(`Found employee: ${employee.name} (${employee.id}), looking up assignment ${assignmentId}`)
+
+      const { data: assignment, error: assignError } = await supabase
+        .from('assignments')
+        .select('id, status')
+        .eq('id', assignmentId)
+        .single()
+
+      if (assignError || !assignment) {
+        console.error('Assignment lookup error:', assignError)
+        await sendMessage(chatId, '❌ Назначение не найдено.')
+        return new Response('OK')
+      }
+
+      if (assignment.status === 'confirmed') {
+        await sendMessage(chatId, '⚠️ Смена уже подтверждена.')
+        return new Response('OK')
+      }
+
+      const { error: updateError } = await supabase
+        .from('assignments')
+        .update({
+          status: 'confirmed',
+          confirmed_by: employee.id,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq('id', assignmentId)
+
+      if (updateError) {
+        console.error('Assignment update error:', updateError)
+        await sendMessage(chatId, `❌ Не удалось подтвердить смену: ${updateError.message}`)
+        return new Response('OK')
+      }
+
+      console.log(`Assignment ${assignmentId} confirmed by ${employee.name}`)
+      await sendMessage(chatId, `✅ Отлично, ${employee.name}! Смена подтверждена.`)
+
+    } else if (callbackData.startsWith('decline_')) {
+      await sendMessage(chatId, '🙅 Понятно, спасибо за ответ. Мы найдём другого сотрудника.')
+    }
+
+    return new Response('OK')
+  }
+
+  // ─── Text message commands ─────────────────────────────────────────────────
   const message = body?.message
   if (!message?.text) return new Response('OK')
 
   const chatId = message.chat.id
   const text: string = message.text.trim()
 
-  // ─── /confirm_{shift_id} ──────────────────────────────────────────────────
-  const confirmMatch = text.match(/^\/confirm_([a-z0-9-]+)$/i)
-  if (confirmMatch) {
-    const shiftId = confirmMatch[1]
+  console.log(`Message from chatId=${chatId}: "${text}"`)
 
-    // Find employee by telegram_chat_id
-    const { data: employees } = await supabase
+  // /start
+  if (text === '/start') {
+    await sendMessage(chatId, `👋 Добро пожаловать!\n\nВаш Chat ID: <b>${chatId}</b>\n\nПередайте его менеджеру для привязки аккаунта.\nДля проверки привязки отправьте /check`)
+    return new Response('OK')
+  }
+
+  // /check — diagnostic: confirms whether this chat ID is linked to an employee
+  if (text === '/check') {
+    const { data: emps, error } = await supabase
       .from('employees')
       .select('id, name')
       .eq('telegram_chat_id', String(chatId))
 
-    const employee = employees?.[0]
-    if (!employee) {
-      await sendMessage(chatId, '❌ Your Telegram account is not linked to any employee profile.')
-      return new Response('OK')
-    }
-
-    // Get shift info
-    const { data: shift } = await supabase
-      .from('shifts')
-      .select('*, customers(*)')
-      .eq('id', shiftId)
-      .single()
-
-    if (!shift) {
-      await sendMessage(chatId, '❌ Shift not found.')
-      return new Response('OK')
-    }
-
-    if (shift.status === 'confirmed') {
-      await sendMessage(chatId, '⚠️ This shift has already been confirmed.')
-      return new Response('OK')
-    }
-
-    // Check if assignment already exists
-    const { data: existingAssignment } = await supabase
-      .from('assignments')
-      .select('id, employee_ids')
-      .eq('shift_id', shiftId)
-      .single()
-
-    const now = new Date().toISOString()
-
-    if (existingAssignment) {
-      // Add employee to existing assignment
-      const updatedIds = [...new Set([...existingAssignment.employee_ids, employee.id])]
-      await supabase.from('assignments').update({
-        employee_ids: updatedIds,
-        confirmed_by: employee.id,
-        confirmed_at: now,
-      }).eq('id', existingAssignment.id)
+    if (error) {
+      await sendMessage(chatId, `❌ Ошибка БД: ${error.message}`)
+    } else if (emps?.length) {
+      await sendMessage(chatId, `✅ Аккаунт привязан: ${emps[0].name}\nChat ID: ${chatId}`)
     } else {
-      // Create new assignment
-      await supabase.from('assignments').insert({
-        shift_id: shiftId,
-        employee_ids: [employee.id],
-        confirmed_by: employee.id,
-        confirmed_at: now,
-      })
+      await sendMessage(chatId, `❌ Аккаунт не привязан.\nВаш Chat ID: ${chatId}\nПередайте его менеджеру.`)
     }
-
-    // Mark shift as confirmed
-    await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shiftId)
-
-    const address = shift.customers?.address ?? 'TBD'
-    await sendMessage(chatId, `✅ Confirmed! You're booked for ${shift.date} at ${address}. See you there!`)
-    return new Response('OK')
-  }
-
-  // ─── /refuse_{shift_id} ───────────────────────────────────────────────────
-  const refuseMatch = text.match(/^\/refuse_([a-z0-9-]+)$/i)
-  if (refuseMatch) {
-    await sendMessage(chatId, "Got it, we'll find someone else. Thanks for letting us know!")
-    return new Response('OK')
-  }
-
-  // ─── /start ───────────────────────────────────────────────────────────────
-  if (text === '/start') {
-    await sendMessage(chatId, `👋 Welcome to CleanShift!\n\nYour Chat ID is: ${chatId}\n\nPlease share this with your manager so they can link your account.`)
     return new Response('OK')
   }
 

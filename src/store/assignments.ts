@@ -12,6 +12,8 @@ interface AssignmentsState {
   remove: (id: string) => Promise<void>
 }
 
+let realtimeSubscribed = false
+
 export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
   assignments: [],
   loading: false,
@@ -26,6 +28,20 @@ export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
     if (error) set({ error: error.message })
     else set({ assignments: data ?? [] })
     set({ loading: false })
+
+    if (!realtimeSubscribed) {
+      realtimeSubscribed = true
+      supabase
+        .channel('assignments-realtime')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assignments' }, (payload) => {
+          set(state => ({
+            assignments: state.assignments.map(a =>
+              a.id === (payload.new as Assignment).id ? { ...a, ...payload.new as Assignment } : a
+            ),
+          }))
+        })
+        .subscribe()
+    }
   },
 
   create: async (data) => {
