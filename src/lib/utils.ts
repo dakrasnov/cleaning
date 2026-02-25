@@ -1,16 +1,13 @@
-import { format, addDays, isToday, isTomorrow, parseISO } from 'date-fns'
+import { format, addDays, parseISO } from 'date-fns'
 
 export const today = new Date()
 
 export const fmtDate = (d: string | null | undefined) => {
   if (!d) return '—'
-  const parsed = parseISO(d)
-  if (isToday(parsed)) return 'Today'
-  if (isTomorrow(parsed)) return 'Tomorrow'
-  return format(parsed, 'MMM d, yyyy')
+  return format(parseISO(d), 'dd.MM.yyyy')
 }
 
-export const fmtDateShort = (d: string | null | undefined) => d ? format(parseISO(d), 'MMM d') : '—'
+export const fmtDateShort = (d: string | null | undefined) => d ? format(parseISO(d), 'dd.MM') : '—'
 
 export const fmtTime = (t: string) => {
   const [h, m] = t.split(':')

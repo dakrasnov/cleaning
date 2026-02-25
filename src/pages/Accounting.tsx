@@ -37,16 +37,16 @@ export default function AccountingPage() {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Accrued</div>
-            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>${grandAccrued.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{grandAccrued.toFixed(2)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Paid</div>
-            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>${grandPaid.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{grandPaid.toFixed(2)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Outstanding</div>
             <div className="font-extrabold text-lg" style={{ color: grandBalance > 0 ? '#10B981' : '#718096' }}>
-              ${grandBalance.toFixed(2)}
+              {grandBalance.toFixed(2)}
             </div>
           </div>
         </div>
@@ -59,14 +59,14 @@ export default function AccountingPage() {
               <div>
                 <div className="font-semibold" style={{ color: NAVY }}>{emp.name}</div>
                 <div className="text-xs text-gray-400 mt-0.5">
-                  ${totalAccrued.toFixed(2)} accrued · ${totalPaid.toFixed(2)} paid
+                  {totalAccrued.toFixed(2)} accrued · {totalPaid.toFixed(2)} paid
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-extrabold text-lg" style={{
                   color: balance > 0 ? '#10B981' : balance < 0 ? '#E53E3E' : '#718096'
                 }}>
-                  ${balance.toFixed(2)}
+                  {balance.toFixed(2)}
                 </div>
                 <div className="text-xs text-gray-400">balance</div>
               </div>

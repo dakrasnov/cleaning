@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useEmployeesStore } from '@/store/employees'
 import { useShiftsStore } from '@/store/shifts'
+import { useCustomersStore } from '@/store/customers'
 import { useAssignmentsStore } from '@/store/assignments'
 import { useAccrualsStore } from '@/store/accruals'
 import { usePaymentsStore } from '@/store/payments'
 import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Textarea } from '@/components/ui'
 import { EmployeeForm } from './Employees'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+import type { Shift } from '@/types'
 
 const NAVY = '#0F2041'
 const MINT = '#00C9A7'
@@ -18,6 +20,7 @@ export default function EmployeeDetailPage() {
   const navigate = useNavigate()
   const { employees, update, remove } = useEmployeesStore()
   const shifts = useShiftsStore(s => s.shifts)
+  const customers = useCustomersStore(s => s.customers)
   const assignments = useAssignmentsStore(s => s.assignments)
   const accruals = useAccrualsStore(s => s.accruals)
   const { payments, create: createPayment } = usePaymentsStore()
@@ -36,8 +39,27 @@ export default function EmployeeDetailPage() {
   if (!employee) return <div className="p-8 text-center text-gray-400">Employee not found</div>
 
   const assignedShiftIds = assignments.filter(a => a.employee_ids.includes(id!)).map(a => a.shift_id)
-  const empShifts = shifts.filter(s => assignedShiftIds.includes(s.id)).sort((a, b) => b.date.localeCompare(a.date))
-  const upcoming = empShifts.filter(s => s.date >= todayStr() && s.status !== 'cancelled').slice(0, 2)
+  const empShifts = shifts.filter(s => assignedShiftIds.includes(s.id))
+
+  // Determine upcoming vs history based on date+time vs now
+  const today = todayStr()
+  const currentTimeStr = new Date().toTimeString().slice(0, 5)
+
+  const isUpcoming = (s: Shift) => {
+    if (s.status === 'cancelled') return false
+    if (s.date > today) return true
+    if (s.date === today) return s.time_start >= currentTimeStr
+    return false
+  }
+
+  const upcoming = empShifts
+    .filter(isUpcoming)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time_start.localeCompare(b.time_start))
+
+  const history = empShifts
+    .filter(s => !isUpcoming(s))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.time_start.localeCompare(a.time_start))
+    .slice(0, 5)
 
   // Accounting calculations
   const empAccruals = accruals.filter(a => a.employee_id === id)
@@ -46,9 +68,30 @@ export default function EmployeeDetailPage() {
   const totalPaid = empPayments.reduce((sum, p) => sum + p.amount, 0)
   const balance = totalAccrued - totalPaid
 
+  // Combined transactions: accruals as positive, payments as negative
+  const allTransactions = [
+    ...empAccruals.map(a => {
+      const shift = shifts.find(s => s.id === a.shift_id)
+      return {
+        id: a.id,
+        date: shift?.date ?? a.created_at.slice(0, 10),
+        amount: a.amount,
+        note: a.note,
+        type: 'accrual' as const,
+      }
+    }),
+    ...empPayments.map(p => ({
+      id: p.id,
+      date: p.paid_at,
+      amount: -p.amount,
+      note: p.note,
+      type: 'payment' as const,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date))
+
   const handlePaymentSubmit = async () => {
     const amount = parseFloat(payAmount)
-    if (!payAmount || isNaN(amount) || amount <= 0) {
+    if (!payAmount || isNaN(amount) || amount === 0) {
       toast.error('Enter a valid amount')
       return
     }
@@ -80,40 +123,49 @@ export default function EmployeeDetailPage() {
         <div className="grid gap-3">
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Phone</div>
             <a href={`tel:${employee.phone}`} className="font-semibold no-underline" style={{ color: MINT }}>{employee.phone}</a></div>
-          <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Email</div><span>{employee.email}</span></div>
-          <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hired</div><span>{fmtDate(employee.hire_date)}</span></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hourly Salary</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>${employee.salary}/hr</span></div>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>{employee.salary}/hr</span></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Overhead</div>
-            <span className="font-semibold">${employee.overhead}</span></div>
-          {employee.telegram_chat_id && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Telegram ID</div><span>{employee.telegram_chat_id}</span></div>}
+            <span className="font-semibold">{employee.overhead}</span></div>
           {employee.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{employee.comment}</p></div>}
         </div>
       </Card>
 
       {upcoming.length > 0 && <>
         <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Upcoming Shifts</h3>
-        {upcoming.map(s => (
-          <Card key={s.id} style={{ borderLeft: `4px solid ${MINT}` }}>
-            <div className="flex justify-between">
-              <div><div className="font-semibold">{fmtDate(s.date)}</div><div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div></div>
-              <Badge status={s.status} />
-            </div>
-          </Card>
-        ))}
+        {upcoming.map(s => {
+          const cust = customers.find(c => c.id === s.customer_id)
+          return (
+            <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)} style={{ borderLeft: `4px solid ${MINT}` }}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-bold">{fmtDate(s.date)} {fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+                  <div className="text-sm text-gray-500 mt-0.5">{cust?.name}</div>
+                </div>
+                <Badge status={s.status} />
+              </div>
+            </Card>
+          )
+        })}
       </>}
 
       <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Shift History</h3>
-      {empShifts.length === 0
-        ? <p className="text-sm text-gray-400">No shifts assigned yet.</p>
-        : empShifts.map(s => (
-          <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
-            <div className="flex justify-between">
-              <div><div className="font-semibold">{fmtDate(s.date)}</div><div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div></div>
-              <Badge status={s.status} />
-            </div>
-          </Card>
-        ))}
+      {history.length === 0
+        ? <p className="text-sm text-gray-400">No past shifts.</p>
+        : history.map(s => {
+          const cust = customers.find(c => c.id === s.customer_id)
+          return (
+            <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-bold">{fmtDate(s.date)} {fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+                  <div className="text-sm text-gray-500 mt-0.5">{cust?.name}</div>
+                </div>
+                <Badge status={s.status} />
+              </div>
+            </Card>
+          )
+        })}
 
       {/* ── Accounting Section ───────────────────────────────────────────────── */}
       <div className="flex justify-between items-center mb-3 mt-6">
@@ -125,48 +177,34 @@ export default function EmployeeDetailPage() {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Accrued</div>
-            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>${totalAccrued.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{totalAccrued.toFixed(2)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Paid</div>
-            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>${totalPaid.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{totalPaid.toFixed(2)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Balance</div>
             <div className="font-extrabold text-lg" style={{ color: balance < 0 ? '#E53E3E' : balance > 0 ? '#10B981' : '#718096' }}>
-              ${balance.toFixed(2)}
+              {balance.toFixed(2)}
             </div>
           </div>
         </div>
       </Card>
 
-      {empPayments.length > 0 && <>
-        <h4 className="font-semibold text-sm mt-4 mb-2" style={{ color: NAVY }}>Recent Payments</h4>
-        {empPayments.slice(0, 5).map(p => (
-          <div key={p.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
+      {allTransactions.length > 0 && <>
+        <h4 className="font-semibold text-sm mt-4 mb-2" style={{ color: NAVY }}>Transactions</h4>
+        {allTransactions.map(t => (
+          <div key={t.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
             <div>
-              <div className="text-sm font-semibold" style={{ color: NAVY }}>{fmtDate(p.paid_at)}</div>
-              {p.note && <div className="text-xs text-gray-400">{p.note}</div>}
+              <div className="text-sm font-semibold" style={{ color: NAVY }}>{fmtDate(t.date)}</div>
+              <div className="text-xs text-gray-400">{t.type === 'accrual' ? 'Shift' : 'Payment'}</div>
             </div>
-            <div className="font-bold" style={{ color: '#3B82F6' }}>-${p.amount.toFixed(2)}</div>
+            <div className="font-bold" style={{ color: t.type === 'accrual' ? '#10B981' : '#3B82F6' }}>
+              {t.type === 'accrual' ? '+' : ''}{t.amount.toFixed(2)}
+            </div>
           </div>
         ))}
-      </>}
-
-      {empAccruals.length > 0 && <>
-        <h4 className="font-semibold text-sm mt-4 mb-2" style={{ color: NAVY }}>Recent Accruals</h4>
-        {empAccruals.slice(0, 5).map(a => {
-          const shift = shifts.find(s => s.id === a.shift_id)
-          return (
-            <div key={a.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
-              <div>
-                <div className="text-sm font-semibold" style={{ color: NAVY }}>{shift ? fmtDate(shift.date) : '—'}</div>
-                <div className="text-xs text-gray-400">{a.note}</div>
-              </div>
-              <div className="font-bold" style={{ color: '#10B981' }}>+${a.amount.toFixed(2)}</div>
-            </div>
-          )
-        })}
       </>}
 
       {showEdit && <Modal title="Edit Employee" onClose={() => setShowEdit(false)}>
@@ -180,13 +218,12 @@ export default function EmployeeDetailPage() {
       {showPayment && (
         <Modal title="Record Payment" onClose={() => setShowPayment(false)}>
           <div className="mb-4 px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: '#F0F2F5', color: NAVY }}>
-            Outstanding Balance: <span style={{ color: balance < 0 ? '#E53E3E' : '#10B981' }}>${balance.toFixed(2)}</span>
+            Outstanding Balance: <span style={{ color: balance < 0 ? '#E53E3E' : '#10B981' }}>{balance.toFixed(2)}</span>
           </div>
-          <Field label="Amount ($) *">
+          <Field label="Amount *">
             <input
               className="input-base"
               type="number"
-              min="0.01"
               step="0.01"
               placeholder="0.00"
               value={payAmount}

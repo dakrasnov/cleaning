@@ -5,7 +5,7 @@ import { useAssignmentsStore } from '@/store/assignments'
 import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
 import { useEmployeesStore } from '@/store/employees'
-import { Badge, Btn, Card, Empty, Field, Input, Modal, PageHeader, Select, SkeletonList } from '@/components/ui'
+import { Badge, Btn, Card, DateInput, Empty, Field, Input, Modal, PageHeader, Select, SkeletonList } from '@/components/ui'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
 import { buildShiftMessage, sendTelegramMessage, sendTelegramWithConfirmation } from '@/lib/telegram'
 import type { Assignment, AssignmentStatus, PaymentInfo } from '@/types'
@@ -30,7 +30,6 @@ export default function AssignmentsPage() {
   const [slot2, setSlot2] = useState('')
   const [slot3, setSlot3] = useState('')
   const [editStatus, setEditStatus] = useState<AssignmentStatus>('assigned')
-  const [editPaymentInfo, setEditPaymentInfo] = useState<PaymentInfo[]>([])
 
   useEffect(() => {
     if (searchParams.get('new') === '1') openCreate()
@@ -48,11 +47,11 @@ export default function AssignmentsPage() {
     return Math.round(hours * (emp.salary ?? 0) + (emp.overhead ?? 0))
   }
 
-  const buildPaymentInfo = (empIds: string[], shiftId: string, existing: PaymentInfo[]): PaymentInfo[] =>
+  const buildPaymentInfo = (empIds: string[], shiftId: string): PaymentInfo[] =>
     empIds.map(empId => ({
       employee_id: empId,
       amount: calcAmount(empId, shiftId),
-      paid: existing.find(p => p.employee_id === empId)?.paid ?? false,
+      paid: false,
     }))
 
   const openCreate = () => {
@@ -60,7 +59,6 @@ export default function AssignmentsPage() {
     setSlot1('')
     setSlot2('')
     setSlot3('')
-    setEditPaymentInfo([])
     setEditingAssignment(null)
     setModalMode('create')
   }
@@ -71,7 +69,6 @@ export default function AssignmentsPage() {
     setSlot2(a.employee_ids[1] ?? '')
     setSlot3(a.employee_ids[2] ?? '')
     setEditStatus((a.status ?? 'assigned') as AssignmentStatus)
-    setEditPaymentInfo(a.payment_info ?? [])
     setEditingAssignment(a)
     setModalMode('edit')
   }
@@ -83,13 +80,6 @@ export default function AssignmentsPage() {
     setSlot1('')
     setSlot2('')
     setSlot3('')
-    setEditPaymentInfo([])
-  }
-
-  const toggleEditPaid = (empId: string) => {
-    setEditPaymentInfo(prev =>
-      prev.map(p => p.employee_id === empId ? { ...p, paid: !p.paid } : p)
-    )
   }
 
   const openShifts = shifts.filter(s => s.status === 'open')
@@ -135,7 +125,7 @@ export default function AssignmentsPage() {
   const handleCreate = async () => {
     const empIds = [slot1, slot2, slot3].filter(Boolean)
     if (!selShift || empIds.length === 0) { toast.error('Select a shift and at least one employee'); return }
-    const paymentInfo = buildPaymentInfo(empIds, selShift, [])
+    const paymentInfo = buildPaymentInfo(empIds, selShift)
     const result = await create({
       shift_id: selShift,
       employee_ids: empIds,
@@ -165,7 +155,7 @@ export default function AssignmentsPage() {
       closeModal()
       return
     }
-    const paymentInfo = buildPaymentInfo(empIds, selShift, editPaymentInfo)
+    const paymentInfo = buildPaymentInfo(empIds, selShift)
     await update(editingAssignment.id, {
       shift_id: selShift,
       employee_ids: empIds,
@@ -180,13 +170,6 @@ export default function AssignmentsPage() {
     closeModal()
   }
 
-  const togglePaidInline = async (assignment: Assignment, employeeId: string) => {
-    const pi = (assignment.payment_info ?? []).map(p =>
-      p.employee_id === employeeId ? { ...p, paid: !p.paid } : p
-    )
-    await update(assignment.id, { payment_info: pi })
-  }
-
   const shiftOptions = modalMode === 'edit' ? allShifts : openShifts
   const selEmpIds = [slot1, slot2, slot3].filter(Boolean)
 
@@ -194,8 +177,8 @@ export default function AssignmentsPage() {
     <div>
       <PageHeader title="Assignments" action={<Btn small onClick={openCreate}>+ Assign</Btn>} />
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <div><label className="text-xs font-semibold text-gray-400">FROM</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
-        <div><label className="text-xs font-semibold text-gray-400">TO</label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">FROM</label><DateInput value={dateFrom} onChange={setDateFrom} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">TO</label><DateInput value={dateTo} onChange={setDateTo} /></div>
       </div>
 
       {loading && <SkeletonList />}
@@ -225,19 +208,7 @@ export default function AssignmentsPage() {
                   <div key={eid} className="flex justify-between items-center rounded-xl px-3 py-2"
                     style={{ background: '#F5F7FA' }}>
                     <span className="font-semibold text-sm" style={{ color: NAVY }}>{emp?.name}</span>
-                    <div className="flex items-center gap-2">
-                      {pi && <span className="text-sm font-bold" style={{ color: NAVY }}>${pi.amount}</span>}
-                      <button
-                        onClick={() => togglePaidInline(a, eid)}
-                        className="text-xs font-bold px-2.5 py-1 rounded-full border-none cursor-pointer"
-                        style={{
-                          background: pi?.paid ? MINT_LIGHT : '#FFE4E4',
-                          color: pi?.paid ? '#00836D' : '#C0392B',
-                          fontFamily: 'inherit',
-                        }}>
-                        {pi?.paid ? '✓ Paid' : 'Unpaid'}
-                      </button>
-                    </div>
+                    {pi && <span className="text-sm font-bold" style={{ color: NAVY }}>{pi.amount}</span>}
                   </div>
                 )
               })}
@@ -289,25 +260,10 @@ export default function AssignmentsPage() {
               {selEmpIds.map(empId => {
                 const emp = employees.find(e => e.id === empId)!
                 const amount = calcAmount(empId, selShift)
-                const pi = editPaymentInfo.find(p => p.employee_id === empId)
                 return (
                   <div key={empId} className="flex justify-between items-center py-1.5">
                     <span className="text-sm font-semibold" style={{ color: NAVY }}>{emp?.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold" style={{ color: NAVY }}>${amount}</span>
-                      {modalMode === 'edit' && (
-                        <button
-                          onClick={() => toggleEditPaid(empId)}
-                          className="text-xs font-bold px-2.5 py-1 rounded-full border-none cursor-pointer"
-                          style={{
-                            background: pi?.paid ? MINT : '#E2E8F0',
-                            color: pi?.paid ? '#fff' : NAVY,
-                            fontFamily: 'inherit',
-                          }}>
-                          {pi?.paid ? '✓ Paid' : 'Unpaid'}
-                        </button>
-                      )}
-                    </div>
+                    <span className="font-bold" style={{ color: NAVY }}>{amount}</span>
                   </div>
                 )
               })}

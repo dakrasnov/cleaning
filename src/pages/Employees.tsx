@@ -105,10 +105,10 @@ export default function EmployeesPage() {
               </div>
               <div className="text-right">
                 <Badge status={e.status} />
-                <div className="text-sm text-gray-400 mt-1.5">${e.salary}/hr</div>
+                <div className="text-sm text-gray-400 mt-1.5">{e.salary}/hr</div>
                 {totalAccrued > 0 && (
                   <div className="text-xs font-bold mt-1" style={{ color: balance > 0 ? MINT : balance < 0 ? '#E53E3E' : '#718096' }}>
-                    {balance > 0 ? `Owes: $${balance.toFixed(2)}` : balance < 0 ? `Overpaid: $${Math.abs(balance).toFixed(2)}` : 'Settled'}
+                    Balance: {Math.round(balance)}
                   </div>
                 )}
               </div>

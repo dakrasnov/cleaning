@@ -26,8 +26,8 @@ export const Badge = ({ status }: { status: string }) => {
 }
 
 // ─── CARD ─────────────────────────────────────────────────────────────────────
-export const Card = ({ children, onClick, className = '' }: { children: ReactNode; onClick?: () => void; className?: string }) => (
-  <div onClick={onClick} className={`card ${onClick ? 'cursor-pointer hover:-translate-y-0.5 transition-transform' : ''} ${className}`}>
+export const Card = ({ children, onClick, className = '', style }: { children: ReactNode; onClick?: () => void; className?: string; style?: React.CSSProperties }) => (
+  <div onClick={onClick} className={`card ${onClick ? 'cursor-pointer hover:-translate-y-0.5 transition-transform' : ''} ${className}`} style={style}>
     {children}
   </div>
 )
@@ -97,6 +97,39 @@ export const Field = ({ label, children, error }: { label: string; children: Rea
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   (props, ref) => <input className="input-base" ref={ref} {...props} />
 )
+
+// ─── DATE INPUT (dd.mm.yyyy display, YYYY-MM-DD value) ────────────────────────
+export const DateInput = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+  const toDisplay = (v: string) => {
+    if (!v) return ''
+    const [y, m, d] = v.split('-')
+    return (y && m && d) ? `${d}.${m}.${y}` : v
+  }
+  const fromDisplay = (v: string): string => {
+    const p = v.split('.')
+    if (p.length === 3 && p[2]?.length === 4) {
+      return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`
+    }
+    return ''
+  }
+  const [display, setDisplay] = React.useState(() => toDisplay(value))
+  React.useEffect(() => { setDisplay(toDisplay(value)) }, [value])
+  return (
+    <input
+      className="input-base"
+      value={display}
+      onChange={e => {
+        const raw = e.target.value
+        setDisplay(raw)
+        const converted = fromDisplay(raw)
+        if (converted) onChange(converted)
+        else if (!raw) onChange('')
+      }}
+      placeholder="dd.mm.yyyy"
+      maxLength={10}
+    />
+  )
+}
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   (props, ref) => <textarea className="input-base min-h-[80px] resize-y" ref={ref} {...props} />

@@ -6,7 +6,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
-import { Badge, Btn, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
+import { Badge, Btn, DateInput, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
 import type { Shift } from '@/types'
 
@@ -170,8 +170,8 @@ export default function ShiftsPage() {
           { value: 'cancelled', label: 'Cancelled' },
         ]} />
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <div><label className="text-xs font-semibold text-gray-400">FROM</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
-        <div><label className="text-xs font-semibold text-gray-400">TO</label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">FROM</label><DateInput value={dateFrom} onChange={setDateFrom} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">TO</label><DateInput value={dateTo} onChange={setDateTo} /></div>
       </div>
 
       {loading && <SkeletonList count={5} />}

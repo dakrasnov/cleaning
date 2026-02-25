@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useCustomersStore } from '@/store/customers'
+import { useShiftsStore } from '@/store/shifts'
 import { Badge, Btn, Card, Empty, Field, FilterPills, Input, Modal, PageHeader, SearchBar, Select, SkeletonList, Textarea } from '@/components/ui'
+import { todayStr } from '@/lib/utils'
 import type { Customer } from '@/types'
 
 const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void; onCreateShift?: () => void }) => {
@@ -48,6 +50,8 @@ const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: P
 export default function CustomersPage() {
   const navigate = useNavigate()
   const { customers, loading, create, update } = useCustomersStore()
+  const shifts = useShiftsStore(s => s.shifts)
+  const today = todayStr()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [editingCustomer, setEditingCustomer] = useState<Customer | Partial<Customer> | null>(null)
@@ -103,20 +107,24 @@ export default function CustomersPage() {
         />
       )}
       
-      {!loading && filtered.map(c => (
-        <Card key={c.id} onClick={() => setEditingCustomer(c)}>
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{c.name}</div>
-              <div className="text-sm text-gray-500">{c.phone}</div>
+      {!loading && filtered.map(c => {
+        const custShifts = shifts.filter(s => s.customer_id === c.id && s.date >= today && s.status !== 'cancelled')
+        const openCount = custShifts.filter(s => s.status === 'open').length
+        return (
+          <Card key={c.id} onClick={() => setEditingCustomer(c)}>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{c.name}</div>
+                <div className="text-sm text-gray-500">{custShifts.length}({openCount}) shifts</div>
+              </div>
+              <div className="text-right">
+                <Badge status={c.status} />
+                <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>{c.price}/hr</div>
+              </div>
             </div>
-            <div className="text-right">
-              <Badge status={c.status} />
-              <div className="font-bold text-lg mt-1.5" style={{ color: '#00C9A7' }}>${c.price}/hr</div>
-            </div>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        )
+      })}
 
       {editingCustomer && (
         <Modal 
