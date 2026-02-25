@@ -13,11 +13,11 @@ const supabase = createClient(
 
 const BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 
-async function sendMessage(chatId: string | number, text: string) {
+async function sendMessage(chatId: string | number, text: string, parseMode = 'HTML') {
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: parseMode }),
   })
   if (!res.ok) {
     console.error('sendMessage failed:', await res.text())
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
   console.log('Incoming update:', JSON.stringify(body))
 
-  // ─── Inline keyboard callback (Да / Нет buttons) ──────────────────────────
+  // ─── Inline keyboard callbacks ────────────────────────────────────────────
   const cbq = body?.callback_query
   if (cbq) {
     const chatId = cbq.from.id
@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
 
     console.log(`callback_query from chatId=${chatId}, data="${callbackData}"`)
 
+    // ── Shift start: confirm ──────────────────────────────────────────────
     if (callbackData.startsWith('confirm_')) {
       const assignmentId = callbackData.slice('confirm_'.length)
       console.log(`Looking up employee for telegram_chat_id=${chatId}`)
@@ -114,8 +115,155 @@ Deno.serve(async (req) => {
       console.log(`Assignment ${assignmentId} confirmed by ${employee.name}`)
       await sendMessage(chatId, `✅ Отлично, ${employee.name}! Смена подтверждена.`)
 
+    // ── Shift start: decline ──────────────────────────────────────────────
     } else if (callbackData.startsWith('decline_')) {
       await sendMessage(chatId, '🙅 Понятно, спасибо за ответ. Мы найдём другого сотрудника.')
+
+    // ── Shift completion: done ────────────────────────────────────────────
+    } else if (callbackData.startsWith('shift_done_')) {
+      const shiftId = callbackData.slice('shift_done_'.length)
+      console.log(`Shift completion "done" from chatId=${chatId}, shiftId=${shiftId}`)
+
+      // Find employee by telegram chat ID
+      const { data: emps, error: empError } = await supabase
+        .from('employees')
+        .select('id, name')
+        .eq('telegram_chat_id', String(chatId))
+
+      if (empError) {
+        console.error('Employee lookup error:', empError)
+        await sendMessage(chatId, '❌ Ошибка при поиске сотрудника. Попробуйте позже.')
+        return new Response('OK')
+      }
+
+      const employee = emps?.[0]
+      if (!employee) {
+        await sendMessage(chatId, `❌ Ваш Telegram (ID: ${chatId}) не привязан ни к одному сотруднику.\n\nПередайте этот ID менеджеру.`)
+        return new Response('OK')
+      }
+
+      // Fetch the shift
+      const { data: shift, error: shiftError } = await supabase
+        .from('shifts')
+        .select('id, status, time_start, time_end')
+        .eq('id', shiftId)
+        .single()
+
+      if (shiftError || !shift) {
+        console.error('Shift lookup error:', shiftError)
+        await sendMessage(chatId, '❌ Смена не найдена.')
+        return new Response('OK')
+      }
+
+      if (shift.status === 'completed') {
+        await sendMessage(chatId, '✅ Смена уже отмечена как завершённая.')
+        return new Response('OK')
+      }
+
+      if (shift.status !== 'confirmed') {
+        await sendMessage(chatId, '⚠️ Смена не может быть завершена в текущем статусе.')
+        return new Response('OK')
+      }
+
+      // Record 'done' response before updating shift
+      await supabase
+        .from('shift_completion_responses')
+        .upsert(
+          {
+            shift_id: shiftId,
+            employee_id: employee.id,
+            response: 'done',
+            responded_at: new Date().toISOString(),
+          },
+          { onConflict: 'shift_id,employee_id' }
+        )
+
+      // Move shift to 'completed'
+      const { error: updateError } = await supabase
+        .from('shifts')
+        .update({ status: 'completed' })
+        .eq('id', shiftId)
+
+      if (updateError) {
+        console.error('Shift update error:', updateError)
+        await sendMessage(chatId, `❌ Ошибка обновления смены: ${updateError.message}`)
+        return new Response('OK')
+      }
+
+      console.log(`Shift ${shiftId} marked completed by ${employee.name}`)
+
+      // ACCRUAL TRIGGER
+      // Must run server-side here because the Zustand browser trigger
+      // only fires when a manager acts in the web UI.
+      // Formula: accrual = employee.salary * shift_duration_hours
+      const { data: assignment } = await supabase
+        .from('assignments')
+        .select('employee_ids')
+        .eq('shift_id', shiftId)
+        .single()
+
+      if (assignment?.employee_ids?.length) {
+        const [sh, sm] = shift.time_start.split(':').map(Number)
+        const [eh, em] = shift.time_end.split(':').map(Number)
+        const durationHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+
+        const { data: allEmployees } = await supabase
+          .from('employees')
+          .select('id, salary')
+          .in('id', assignment.employee_ids)
+
+        if (allEmployees?.length) {
+          const accrualRows = allEmployees.map((emp: any) => ({
+            employee_id: emp.id,
+            shift_id: shiftId,
+            amount: emp.salary * durationHours,
+            note: 'Shift completed via Telegram',
+          }))
+
+          const { error: accrualError } = await supabase
+            .from('employee_accruals')
+            .upsert(accrualRows, { onConflict: 'employee_id,shift_id' })
+
+          if (accrualError) {
+            console.error('Accrual insert error:', accrualError)
+          } else {
+            console.log(`Created ${accrualRows.length} accrual(s) for shift ${shiftId}`)
+          }
+        }
+      }
+
+      await sendMessage(chatId, `✅ Отлично, ${employee.name}! Смена завершена. Спасибо за работу! 🙌`)
+
+    // ── Shift completion: still in progress ───────────────────────────────
+    } else if (callbackData.startsWith('shift_wip_')) {
+      const shiftId = callbackData.slice('shift_wip_'.length)
+      console.log(`Shift completion "wip" from chatId=${chatId}, shiftId=${shiftId}`)
+
+      // Find employee to record the response
+      const { data: emps } = await supabase
+        .from('employees')
+        .select('id, name')
+        .eq('telegram_chat_id', String(chatId))
+
+      const employee = emps?.[0]
+
+      if (employee) {
+        // Record 'wip' — prevents re-notification this round
+        await supabase
+          .from('shift_completion_responses')
+          .upsert(
+            {
+              shift_id: shiftId,
+              employee_id: employee.id,
+              response: 'wip',
+              responded_at: new Date().toISOString(),
+            },
+            { onConflict: 'shift_id,employee_id' }
+          )
+        console.log(`Recorded wip response for ${employee.name}, shift ${shiftId}`)
+      }
+
+      await sendMessage(chatId, '🔄 Понятно! Продолжайте, удачи на смене.')
     }
 
     return new Response('OK')

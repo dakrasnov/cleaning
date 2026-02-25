@@ -19,6 +19,7 @@ import ShiftsPage from '@/pages/Shifts'
 import ShiftDetailPage from '@/pages/ShiftDetail'
 import AssignmentsPage from '@/pages/Assignments'
 import UsersPage from '@/pages/Users'
+import AccountingPage from '@/pages/Accounting'
 
 const ADMIN_TABS = [
   { path: '/',            icon: '🏠', label: 'Home'    },
@@ -26,6 +27,7 @@ const ADMIN_TABS = [
   { path: '/employees',   icon: '👷', label: 'Team'    },
   { path: '/shifts',      icon: '📅', label: 'Shifts'  },
   { path: '/assignments', icon: '✅', label: 'Tasks'   },
+  { path: '/accounting',  icon: '💰', label: 'Pay'     },
   { path: '/users',       icon: '🔑', label: 'Users'   },
 ]
 
@@ -83,6 +85,7 @@ const AdminLayout = () => {
           <Route path="/shifts"        element={<ShiftsPage />}         />
           <Route path="/shifts/:id"    element={<ShiftDetailPage />}    />
           <Route path="/assignments"   element={<AssignmentsPage />}    />
+          <Route path="/accounting"    element={<AccountingPage />}     />
           <Route path="/users"         element={<UsersPage />}          />
           <Route path="*"              element={<Navigate to="/" />}    />
         </Routes>

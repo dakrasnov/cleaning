@@ -12,9 +12,10 @@ export interface TelegramShiftPayload {
   comment: string
 }
 
+
 export function buildShiftMessage(p: TelegramShiftPayload): string {
   const [y, m, d] = p.date.split('-').map(Number)
-  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(y, m - 1, d).getDay()]
+  const dayName = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][new Date(y, m - 1, d).getDay()]
 
   const [sh, sm] = p.timeStart.split(':').map(Number)
   const [eh, em] = p.timeEnd.split(':').map(Number)
@@ -23,17 +24,24 @@ export function buildShiftMessage(p: TelegramShiftPayload): string {
   const mins = totalMins % 60
   const duration = mins === 0 ? `${hrs} hrs` : `${hrs} hrs ${mins} min`
 
+  const formattedDate = `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`
+  const timeStart = p.timeStart.slice(0, 5)  // HH:MM
+  const timeEnd = p.timeEnd.slice(0, 5)      // HH:MM
+
   const lines = [
-    `🧹 ${p.employeeName}, Вы назначены на смену!`,
-    `🗓️ Дата: ${p.date}, ${dayName}`,
-    `⏰ Время: ${p.timeStart} – ${p.timeEnd}, ${duration}`,
-    `    Клиент: ${p.customerName}`,
+    `${p.employeeName}, Вы назначены на смену!`,
+    `🗓️ Дата: ${formattedDate}, ${dayName}`,
+    `⏰ Время: ${timeStart} – ${timeEnd}, ${duration}`,
+    `👤 Клиент: ${p.customerName}`,
     `📍 Адрес: ${p.address}`,
     `💰 Ставка: ${p.price}`,
   ]
   if (p.comment) lines.push(`📝 Комментарий: ${p.comment}`)
   return lines.join('\n')
 }
+
+
+
 
 export async function sendTelegramMessage(chatId: string, text: string): Promise<boolean> {
   if (!BOT_TOKEN) {
@@ -65,7 +73,7 @@ export async function sendTelegramWithConfirmation(chatId: string, text: string,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: text + '\n\n❓ Вы подтверждаете смену?',
+        text: text + '\n\n❓ Подтвердите Ваш выход',
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [[

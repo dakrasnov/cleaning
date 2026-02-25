@@ -119,3 +119,22 @@ CREATE INDEX ON public.employee_payments (employee_id);
 
 ALTER TABLE public.employee_payments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_payments" ON public.employee_payments FOR ALL USING (true) WITH CHECK (true);
+
+-- ─── MIGRATION: Telegram Shift Completion Responses ──────────────────────────
+-- Tracks per-employee responses to the completion prompt (done / wip)
+-- Prevents re-notification and drives the shift→completed transition
+
+CREATE TABLE public.shift_completion_responses (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shift_id     uuid NOT NULL REFERENCES public.shifts(id) ON DELETE CASCADE,
+  employee_id  uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  response     text NOT NULL CHECK (response IN ('done', 'wip')),
+  responded_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (shift_id, employee_id)
+);
+
+CREATE INDEX ON public.shift_completion_responses (shift_id);
+CREATE INDEX ON public.shift_completion_responses (employee_id);
+
+ALTER TABLE public.shift_completion_responses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_responses" ON public.shift_completion_responses FOR ALL USING (true) WITH CHECK (true);

@@ -64,7 +64,7 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
         const durationHours = (toMinutes(shift.time_end) - toMinutes(shift.time_start)) / 60
         const entries = assignment.employee_ids.map(eid => {
           const emp = employees.find(e => e.id === eid)
-          const amount = emp ? durationHours * emp.salary + emp.overhead : 0
+          const amount = emp ? durationHours * emp.salary : 0
           return { employee_id: eid, amount }
         })
         await useAccrualsStore.getState().createForShift(id, entries)

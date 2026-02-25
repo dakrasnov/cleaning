@@ -3,3 +3,7 @@ verify_jwt = false
 
 [functions.admin-users]
 verify_jwt = false
+
+[functions.shift-completion-checker]
+verify_jwt = false
+
