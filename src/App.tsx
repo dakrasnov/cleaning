@@ -5,6 +5,8 @@ import { useCustomersStore } from '@/store/customers'
 import { useEmployeesStore } from '@/store/employees'
 import { useShiftsStore } from '@/store/shifts'
 import { useAssignmentsStore } from '@/store/assignments'
+import { useAccrualsStore } from '@/store/accruals'
+import { usePaymentsStore } from '@/store/payments'
 
 import LoginPage from '@/pages/Login'
 import EmployeeDashboard from '@/pages/EmployeeDashboard'
@@ -42,12 +44,16 @@ const AdminLayout = () => {
   const fetchEmployees   = useEmployeesStore(s => s.fetch)
   const fetchShifts      = useShiftsStore(s => s.fetch)
   const fetchAssignments = useAssignmentsStore(s => s.fetch)
+  const fetchAccruals    = useAccrualsStore(s => s.fetch)
+  const fetchPayments    = usePaymentsStore(s => s.fetch)
 
   useEffect(() => {
     fetchCustomers()
     fetchEmployees()
     fetchShifts()
     fetchAssignments()
+    fetchAccruals()
+    fetchPayments()
   }, [])
 
   const hideNav = location.pathname.split('/').filter(Boolean).length >= 2

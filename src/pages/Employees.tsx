@@ -5,8 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useEmployeesStore } from '@/store/employees'
+import { useAccrualsStore } from '@/store/accruals'
+import { usePaymentsStore } from '@/store/payments'
 import { Badge, Btn, Card, Empty, Field, FilterPills, Input, Modal, PageHeader, SearchBar, Select, SkeletonList, Textarea } from '@/components/ui'
 import type { Employee } from '@/types'
+
+const MINT = '#00C9A7'
 
 const schema = z.object({
   name: z.string().min(1, 'Required'),
@@ -57,6 +61,8 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
 export default function EmployeesPage() {
   const navigate = useNavigate()
   const { employees, loading, create } = useEmployeesStore()
+  const accruals = useAccrualsStore(s => s.accruals)
+  const payments = usePaymentsStore(s => s.payments)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [showForm, setShowForm] = useState(false)
@@ -86,20 +92,30 @@ export default function EmployeesPage() {
 
       {loading && <SkeletonList />}
       {!loading && filtered.length === 0 && <Empty icon="👷" title="No Employees" sub="Add your first team member." cta="+ Add Employee" onCta={() => setShowForm(true)} />}
-      {!loading && filtered.map(e => (
-        <Card key={e.id} onClick={() => navigate(`/employees/${e.id}`)}>
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{e.name}</div>
-              <a href={`tel:${e.phone}`} className="text-sm text-gray-500 no-underline" onClick={ev => ev.stopPropagation()}>{e.phone}</a>
+      {!loading && filtered.map(e => {
+        const totalAccrued = accruals.filter(a => a.employee_id === e.id).reduce((sum, a) => sum + a.amount, 0)
+        const totalPaid = payments.filter(p => p.employee_id === e.id).reduce((sum, p) => sum + p.amount, 0)
+        const balance = totalAccrued - totalPaid
+        return (
+          <Card key={e.id} onClick={() => navigate(`/employees/${e.id}`)}>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{e.name}</div>
+                <a href={`tel:${e.phone}`} className="text-sm text-gray-500 no-underline" onClick={ev => ev.stopPropagation()}>{e.phone}</a>
+              </div>
+              <div className="text-right">
+                <Badge status={e.status} />
+                <div className="text-sm text-gray-400 mt-1.5">${e.salary}/hr</div>
+                {totalAccrued > 0 && (
+                  <div className="text-xs font-bold mt-1" style={{ color: balance > 0 ? MINT : balance < 0 ? '#E53E3E' : '#718096' }}>
+                    {balance > 0 ? `Owes: $${balance.toFixed(2)}` : balance < 0 ? `Overpaid: $${Math.abs(balance).toFixed(2)}` : 'Settled'}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-right">
-              <Badge status={e.status} />
-              <div className="text-sm text-gray-400 mt-1.5">${e.salary}/hr</div>
-            </div>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        )
+      })}
 
       {showForm && <Modal title="New Employee" onClose={() => setShowForm(false)}>
         <EmployeeForm onSave={handleCreate} onClose={() => setShowForm(false)} />

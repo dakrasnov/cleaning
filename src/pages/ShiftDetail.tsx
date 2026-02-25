@@ -40,6 +40,12 @@ export default function ShiftDetailPage() {
         <div className="flex flex-col items-end gap-2">
           <Badge status={shift.status} />
           <div className="flex gap-2">
+            {shift.status === 'confirmed' && (
+              <Btn small variant="primary" onClick={async () => {
+                await update(shift.id, { status: 'completed' })
+                toast.success('Shift marked as completed')
+              }}>Complete</Btn>
+            )}
             <Btn small variant="secondary" onClick={() => setShowEdit(true)}>Edit</Btn>
             <Btn small variant="danger" onClick={() => setShowDelete(true)}>Delete</Btn>
           </div>

@@ -47,7 +47,7 @@ const schema = z.object({
   time_start: z.string().min(1, 'Start time is required'),
   time_end: z.string().min(1, 'End time is required'),
   comment: z.string(),
-  status: z.enum(['open', 'confirmed', 'cancelled']),
+  status: z.enum(['open', 'confirmed', 'cancelled', 'completed']),
 })
 type FormData = z.infer<typeof schema>
 
@@ -104,6 +104,7 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
           <option value="open">Open</option>
           <option value="confirmed">Confirmed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="completed">Completed</option>
         </Select>
       </Field>
       <Field label="Comment"><Textarea {...register('comment')} /></Field>
@@ -157,7 +158,7 @@ export default function ShiftsPage() {
     }
   }
 
-  const statusColors: Record<string, string> = { open: '#ECC94B', confirmed: MINT, cancelled: '#E53E3E' }
+  const statusColors: Record<string, string> = { open: '#ECC94B', confirmed: MINT, completed: '#10B981', cancelled: '#E53E3E' }
 
   return (
     <div>
@@ -165,7 +166,8 @@ export default function ShiftsPage() {
       <FilterPills value={statusFilter} onChange={setStatusFilter}
         options={[
           { value: 'all', label: 'All' }, { value: 'open', label: 'Open' },
-          { value: 'confirmed', label: 'Confirmed' }, { value: 'cancelled', label: 'Cancelled' },
+          { value: 'confirmed', label: 'Confirmed' }, { value: 'completed', label: 'Completed' },
+          { value: 'cancelled', label: 'Cancelled' },
         ]} />
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div><label className="text-xs font-semibold text-gray-400">FROM</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>

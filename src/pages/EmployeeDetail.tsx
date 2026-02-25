@@ -4,7 +4,9 @@ import toast from 'react-hot-toast'
 import { useEmployeesStore } from '@/store/employees'
 import { useShiftsStore } from '@/store/shifts'
 import { useAssignmentsStore } from '@/store/assignments'
-import { Badge, BackBtn, Btn, Card, ConfirmSheet, Modal } from '@/components/ui'
+import { useAccrualsStore } from '@/store/accruals'
+import { usePaymentsStore } from '@/store/payments'
+import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Textarea } from '@/components/ui'
 import { EmployeeForm } from './Employees'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
 
@@ -17,16 +19,48 @@ export default function EmployeeDetailPage() {
   const { employees, update, remove } = useEmployeesStore()
   const shifts = useShiftsStore(s => s.shifts)
   const assignments = useAssignmentsStore(s => s.assignments)
+  const accruals = useAccrualsStore(s => s.accruals)
+  const { payments, create: createPayment } = usePaymentsStore()
 
   const employee = employees.find(e => e.id === id)
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [showPayment, setShowPayment] = useState(false)
+
+  // Payment form state
+  const [payAmount, setPayAmount] = useState('')
+  const [payDate, setPayDate] = useState(todayStr())
+  const [payNote, setPayNote] = useState('')
+  const [paySubmitting, setPaySubmitting] = useState(false)
 
   if (!employee) return <div className="p-8 text-center text-gray-400">Employee not found</div>
 
   const assignedShiftIds = assignments.filter(a => a.employee_ids.includes(id!)).map(a => a.shift_id)
   const empShifts = shifts.filter(s => assignedShiftIds.includes(s.id)).sort((a, b) => b.date.localeCompare(a.date))
   const upcoming = empShifts.filter(s => s.date >= todayStr() && s.status !== 'cancelled').slice(0, 2)
+
+  // Accounting calculations
+  const empAccruals = accruals.filter(a => a.employee_id === id)
+  const empPayments = payments.filter(p => p.employee_id === id)
+  const totalAccrued = empAccruals.reduce((sum, a) => sum + a.amount, 0)
+  const totalPaid = empPayments.reduce((sum, p) => sum + p.amount, 0)
+  const balance = totalAccrued - totalPaid
+
+  const handlePaymentSubmit = async () => {
+    const amount = parseFloat(payAmount)
+    if (!payAmount || isNaN(amount) || amount <= 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    setPaySubmitting(true)
+    await createPayment({ employee_id: id!, amount, paid_at: payDate, note: payNote })
+    toast.success('Payment recorded')
+    setPaySubmitting(false)
+    setShowPayment(false)
+    setPayAmount('')
+    setPayDate(todayStr())
+    setPayNote('')
+  }
 
   return (
     <div>
@@ -81,12 +115,98 @@ export default function EmployeeDetailPage() {
           </Card>
         ))}
 
+      {/* ── Accounting Section ───────────────────────────────────────────────── */}
+      <div className="flex justify-between items-center mb-3 mt-6">
+        <h3 className="font-heading font-bold" style={{ color: NAVY }}>Accounting</h3>
+        <Btn small onClick={() => setShowPayment(true)}>+ Add Payment</Btn>
+      </div>
+
+      <Card>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Accrued</div>
+            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>${totalAccrued.toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Paid</div>
+            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>${totalPaid.toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Balance</div>
+            <div className="font-extrabold text-lg" style={{ color: balance < 0 ? '#E53E3E' : balance > 0 ? '#10B981' : '#718096' }}>
+              ${balance.toFixed(2)}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {empPayments.length > 0 && <>
+        <h4 className="font-semibold text-sm mt-4 mb-2" style={{ color: NAVY }}>Recent Payments</h4>
+        {empPayments.slice(0, 5).map(p => (
+          <div key={p.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
+            <div>
+              <div className="text-sm font-semibold" style={{ color: NAVY }}>{fmtDate(p.paid_at)}</div>
+              {p.note && <div className="text-xs text-gray-400">{p.note}</div>}
+            </div>
+            <div className="font-bold" style={{ color: '#3B82F6' }}>-${p.amount.toFixed(2)}</div>
+          </div>
+        ))}
+      </>}
+
+      {empAccruals.length > 0 && <>
+        <h4 className="font-semibold text-sm mt-4 mb-2" style={{ color: NAVY }}>Recent Accruals</h4>
+        {empAccruals.slice(0, 5).map(a => {
+          const shift = shifts.find(s => s.id === a.shift_id)
+          return (
+            <div key={a.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: NAVY }}>{shift ? fmtDate(shift.date) : '—'}</div>
+                <div className="text-xs text-gray-400">{a.note}</div>
+              </div>
+              <div className="font-bold" style={{ color: '#10B981' }}>+${a.amount.toFixed(2)}</div>
+            </div>
+          )
+        })}
+      </>}
+
       {showEdit && <Modal title="Edit Employee" onClose={() => setShowEdit(false)}>
         <EmployeeForm initial={employee} onSave={async (data) => { await update(employee.id, data); toast.success('Employee updated'); setShowEdit(false) }} onClose={() => setShowEdit(false)} />
       </Modal>}
+
       {showDelete && <ConfirmSheet msg="Delete this employee? This cannot be undone."
         onConfirm={async () => { await remove(employee.id); toast.success('Employee deleted'); navigate('/employees') }}
         onCancel={() => setShowDelete(false)} />}
+
+      {showPayment && (
+        <Modal title="Record Payment" onClose={() => setShowPayment(false)}>
+          <div className="mb-4 px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: '#F0F2F5', color: NAVY }}>
+            Outstanding Balance: <span style={{ color: balance < 0 ? '#E53E3E' : '#10B981' }}>${balance.toFixed(2)}</span>
+          </div>
+          <Field label="Amount ($) *">
+            <input
+              className="input-base"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="0.00"
+              value={payAmount}
+              onChange={e => setPayAmount(e.target.value)}
+            />
+          </Field>
+          <Field label="Date *">
+            <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
+          </Field>
+          <Field label="Note">
+            <Textarea placeholder="Optional note..." value={payNote} onChange={e => setPayNote(e.target.value)} />
+          </Field>
+          <div className="flex gap-3 mt-2">
+            <Btn variant="secondary" full onClick={() => setShowPayment(false)}>Cancel</Btn>
+            <Btn full disabled={paySubmitting} onClick={handlePaymentSubmit}>
+              {paySubmitting ? 'Saving…' : 'Record Payment'}
+            </Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

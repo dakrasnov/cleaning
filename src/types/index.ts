@@ -1,6 +1,6 @@
 export type CustomerStatus = 'active' | 'inactive'
 export type EmployeeStatus = 'active' | 'inactive' | 'on_leave'
-export type ShiftStatus = 'open' | 'confirmed' | 'cancelled'
+export type ShiftStatus = 'open' | 'confirmed' | 'cancelled' | 'completed'
 export type AssignmentStatus = 'assigned' | 'confirmed' | 'completed'
 
 export interface PaymentInfo {
@@ -55,6 +55,24 @@ export interface Assignment {
   confirmed_at: string | null
   status: AssignmentStatus
   payment_info: PaymentInfo[]
+  created_at: string
+}
+
+export interface EmployeeAccrual {
+  id: string
+  employee_id: string
+  shift_id: string
+  amount: number
+  note: string
+  created_at: string
+}
+
+export interface EmployeePayment {
+  id: string
+  employee_id: string
+  amount: number
+  note: string
+  paid_at: string
   created_at: string
 }
 

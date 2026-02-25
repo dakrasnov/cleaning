@@ -76,3 +76,46 @@ create policy "allow_all_customers"   on public.customers   for all using (true)
 create policy "allow_all_employees"   on public.employees   for all using (true) with check (true);
 create policy "allow_all_shifts"      on public.shifts      for all using (true) with check (true);
 create policy "allow_all_assignments" on public.assignments for all using (true) with check (true);
+
+-- ─── MIGRATION: Employee Financial Accounting ────────────────────────────────
+-- Run these statements in Supabase Dashboard → SQL Editor
+
+-- 1. Add 'completed' to shifts status constraint
+ALTER TABLE public.shifts
+  DROP CONSTRAINT shifts_status_check;
+
+ALTER TABLE public.shifts
+  ADD CONSTRAINT shifts_status_check
+  CHECK (status IN ('open', 'confirmed', 'cancelled', 'completed'));
+
+-- 2. Accruals table: one row per employee per completed shift
+CREATE TABLE public.employee_accruals (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  shift_id    uuid NOT NULL REFERENCES public.shifts(id) ON DELETE CASCADE,
+  amount      numeric NOT NULL DEFAULT 0,
+  note        text NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, shift_id)
+);
+
+CREATE INDEX ON public.employee_accruals (employee_id);
+CREATE INDEX ON public.employee_accruals (shift_id);
+
+ALTER TABLE public.employee_accruals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_accruals" ON public.employee_accruals FOR ALL USING (true) WITH CHECK (true);
+
+-- 3. Payments table: freeform cash/bank transfers to employees
+CREATE TABLE public.employee_payments (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  amount      numeric NOT NULL,
+  note        text NOT NULL DEFAULT '',
+  paid_at     date NOT NULL DEFAULT CURRENT_DATE,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON public.employee_payments (employee_id);
+
+ALTER TABLE public.employee_payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_payments" ON public.employee_payments FOR ALL USING (true) WITH CHECK (true);

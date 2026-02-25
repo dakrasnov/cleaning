@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { Shift } from '@/types'
+import { useAssignmentsStore } from '@/store/assignments'
+import { useEmployeesStore } from '@/store/employees'
+import { useAccrualsStore } from '@/store/accruals'
 
 interface ShiftsState {
   shifts: Shift[]
@@ -10,6 +13,11 @@ interface ShiftsState {
   create: (data: Omit<Shift, 'id' | 'created_at'>) => Promise<Shift | null>
   update: (id: string, data: Partial<Shift>) => Promise<void>
   remove: (id: string) => Promise<void>
+}
+
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.slice(0, 5).split(':').map(Number)
+  return h * 60 + m
 }
 
 export const useShiftsStore = create<ShiftsState>((set, get) => ({
@@ -40,9 +48,33 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
   },
 
   update: async (id, data) => {
+    const prevShift = get().shifts.find(s => s.id === id)
     const { error } = await supabase.from('shifts').update(data).eq('id', id)
     if (error) { set({ error: error.message }); return }
     set({ shifts: get().shifts.map(s => s.id === id ? { ...s, ...data } : s) })
+
+    // Accrual trigger: completing a shift creates accruals for assigned employees.
+    // Each employee earns: (shift duration in hours × their salary) + their overhead
+    if (data.status === 'completed' && prevShift?.status !== 'completed') {
+      const shift = get().shifts.find(s => s.id === id)
+      const { assignments } = useAssignmentsStore.getState()
+      const { employees } = useEmployeesStore.getState()
+      const assignment = assignments.find(a => a.shift_id === id)
+      if (shift && assignment && assignment.employee_ids.length > 0) {
+        const durationHours = (toMinutes(shift.time_end) - toMinutes(shift.time_start)) / 60
+        const entries = assignment.employee_ids.map(eid => {
+          const emp = employees.find(e => e.id === eid)
+          const amount = emp ? durationHours * emp.salary + emp.overhead : 0
+          return { employee_id: eid, amount }
+        })
+        await useAccrualsStore.getState().createForShift(id, entries)
+      }
+    }
+
+    // Reversal: moving away from 'completed' deletes accruals for that shift
+    if (prevShift?.status === 'completed' && data.status && data.status !== 'completed') {
+      await useAccrualsStore.getState().deleteByShift(id)
+    }
   },
 
   remove: async (id) => {
