@@ -51,16 +51,22 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<FormData>; onSave: (d: FormData) => void; onClose: () => void }) => {
+export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
+  initial?: Partial<FormData>
+  onSave: (d: FormData) => void
+  onClose: () => void
+  onDelete?: () => void
+}) => {
   const customers = useCustomersStore(s => s.customers)
   const [duration, setDuration] = useState(() =>
     initial?.time_start && initial?.time_end ? diffMins(initial.time_start, initial.time_end) : 120
   )
+  const defaultCustomerId = initial?.customer_id ?? (customers[0]?.id ?? '')
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: 'onSubmit',
     defaultValues: {
-      customer_id: initial?.customer_id ?? (customers[0]?.id ?? ''),
+      customer_id: defaultCustomerId,
       date: initial?.date ?? todayStr(),
       time_start: (initial?.time_start ?? '09:00').slice(0, 5),
       time_end: (initial?.time_end ?? '11:00').slice(0, 5),
@@ -70,6 +76,16 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
   })
   const timeStart = watch('time_start')
   const endTime = watch('time_end')
+  const customerId = watch('customer_id')
+
+  // Customer search state
+  const [custSearch, setCustSearch] = useState(() =>
+    customers.find(c => c.id === defaultCustomerId)?.name ?? ''
+  )
+  const [custOpen, setCustOpen] = useState(false)
+  const filteredCustomers = custSearch
+    ? customers.filter(c => c.name.toLowerCase().includes(custSearch.toLowerCase()))
+    : customers
 
   useEffect(() => {
     setValue('time_end', addMins(timeStart, duration))
@@ -78,12 +94,39 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
   return (
     <form onSubmit={handleSubmit(onSave)}>
       <Field label="Customer *" error={errors.customer_id?.message}>
-        <Select {...register('customer_id')}>
-          <option value="">-- Select customer --</option>
-          {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </Select>
+        <div className="relative">
+          <input
+            className="input-base"
+            value={custSearch}
+            placeholder="Search customer..."
+            autoComplete="off"
+            onChange={e => { setCustSearch(e.target.value); setCustOpen(true) }}
+            onFocus={() => setCustOpen(true)}
+            onBlur={() => setTimeout(() => setCustOpen(false), 150)}
+          />
+          {custOpen && filteredCustomers.length > 0 && (
+            <div className="absolute z-20 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-48 overflow-y-auto">
+              {filteredCustomers.map(c => (
+                <div
+                  key={c.id}
+                  className="px-4 py-2.5 cursor-pointer text-sm"
+                  style={{
+                    color: c.id === customerId ? MINT : NAVY,
+                    fontWeight: c.id === customerId ? 700 : 400,
+                    background: c.id === customerId ? '#F0FAF8' : 'transparent',
+                  }}
+                  onMouseDown={() => {
+                    setValue('customer_id', c.id, { shouldValidate: true })
+                    setCustSearch(c.name)
+                    setCustOpen(false)
+                  }}
+                >{c.name}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        <input type="hidden" {...register('customer_id')} />
       </Field>
-      <Field label="Date *" error={errors.date?.message}><Input type="date" {...register('date')} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Start *" error={errors.time_start?.message}>
           <Select {...register('time_start')}>
@@ -99,6 +142,7 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
       <div className="text-sm text-gray-500 -mt-2 mb-4">
         Ends at: <span className="font-semibold" style={{ color: MINT }}>{endTime}</span>
       </div>
+      <Field label="Date *" error={errors.date?.message}><Input type="date" {...register('date')} /></Field>
       <Field label="Status">
         <Select {...register('status')}>
           <option value="open">Open</option>
@@ -112,6 +156,11 @@ export const ShiftForm = ({ initial, onSave, onClose }: { initial?: Partial<Form
         <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
         <Btn full>{initial?.date ? 'Save Changes' : 'Create Shift'}</Btn>
       </div>
+      {onDelete && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <Btn variant="danger" full onClick={onDelete}>Delete Shift</Btn>
+        </div>
+      )}
     </form>
   )
 }

@@ -3,6 +3,7 @@ import { useEmployeesStore } from '@/store/employees'
 import { useAccrualsStore } from '@/store/accruals'
 import { usePaymentsStore } from '@/store/payments'
 import { Card, PageHeader } from '@/components/ui'
+import { fmtAmount } from '@/lib/utils'
 
 const NAVY = '#0F2041'
 
@@ -23,7 +24,12 @@ export default function AccountingPage() {
         .reduce((sum, p) => sum + p.amount, 0)
       return { emp, totalAccrued, totalPaid, balance: totalAccrued - totalPaid }
     })
-    .sort((a, b) => b.balance - a.balance)
+    .sort((a, b) => {
+      const catA = a.balance < 0 ? 0 : a.balance > 0 ? 1 : 2
+      const catB = b.balance < 0 ? 0 : b.balance > 0 ? 1 : 2
+      if (catA !== catB) return catA - catB
+      return a.balance - b.balance
+    })
 
   const grandAccrued = rows.reduce((s, r) => s + r.totalAccrued, 0)
   const grandPaid = rows.reduce((s, r) => s + r.totalPaid, 0)
@@ -37,36 +43,31 @@ export default function AccountingPage() {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Accrued</div>
-            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{grandAccrued.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{fmtAmount(grandAccrued)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Paid</div>
-            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{grandPaid.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{fmtAmount(grandPaid)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Outstanding</div>
             <div className="font-extrabold text-lg" style={{ color: grandBalance > 0 ? '#10B981' : '#718096' }}>
-              {grandBalance.toFixed(2)}
+              {fmtAmount(grandBalance)}
             </div>
           </div>
         </div>
       </Card>
 
       <div className="mt-5">
-        {rows.map(({ emp, totalAccrued, totalPaid, balance }) => (
+        {rows.map(({ emp, balance }) => (
           <Card key={emp.id} onClick={() => navigate(`/employees/${emp.id}`)}>
             <div className="flex justify-between items-center">
-              <div>
-                <div className="font-semibold" style={{ color: NAVY }}>{emp.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  {totalAccrued.toFixed(2)} accrued · {totalPaid.toFixed(2)} paid
-                </div>
-              </div>
+              <div className="font-semibold" style={{ color: NAVY }}>{emp.name}</div>
               <div className="text-right">
                 <div className="font-extrabold text-lg" style={{
                   color: balance > 0 ? '#10B981' : balance < 0 ? '#E53E3E' : '#718096'
                 }}>
-                  {balance.toFixed(2)}
+                  {fmtAmount(balance)}
                 </div>
                 <div className="text-xs text-gray-400">balance</div>
               </div>

@@ -75,6 +75,7 @@ export default function CustomerDetailPage() {
           <Badge status={customer.status} />
         </div>
         <div className="flex gap-2">
+          <Btn small onClick={() => navigate(`/shifts?new=1&customer_id=${customer.id}`)}>+ Shift</Btn>
           <Btn small variant="secondary" onClick={() => setShowEdit(true)}>Edit</Btn>
           <Btn small variant="danger" onClick={() => setShowDelete(true)}>Delete</Btn>
         </div>

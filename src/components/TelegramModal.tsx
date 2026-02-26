@@ -19,10 +19,12 @@ const buildPayload = (emp: Employee | undefined, shift: Shift, customer: Custome
   customerName: customer.name,
   shiftId: shift.id,
   address: customer.address,
+  googleMapsLink: customer.google_maps_link || undefined,
   date: shift.date,
   timeStart: shift.time_start,
   timeEnd: shift.time_end,
-  price: customer.price,
+  employeeSalary: emp?.salary ?? 0,
+  employeeOverhead: emp?.overhead ?? 0,
   comment: shift.comment,
 })
 

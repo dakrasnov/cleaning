@@ -111,11 +111,13 @@ export default function CustomersPage() {
         const custShifts = shifts.filter(s => s.customer_id === c.id && s.date >= today && s.status !== 'cancelled')
         const openCount = custShifts.filter(s => s.status === 'open').length
         return (
-          <Card key={c.id} onClick={() => setEditingCustomer(c)}>
+          <Card key={c.id} onClick={() => navigate(`/customers/${c.id}`)}>
             <div className="flex justify-between items-start">
               <div>
                 <div className="font-bold text-base mb-1" style={{ color: '#0F2041' }}>{c.name}</div>
-                <div className="text-sm text-gray-500">{custShifts.length}({openCount}) shifts</div>
+                {custShifts.length > 0 && (
+                  <div className="text-sm text-gray-500">{custShifts.length}({openCount}) shifts</div>
+                )}
               </div>
               <div className="text-right">
                 <Badge status={c.status} />
@@ -126,21 +128,12 @@ export default function CustomersPage() {
         )
       })}
 
-      {editingCustomer && (
-        <Modal 
-          title={('id' in editingCustomer) ? "Edit Customer" : "New Customer"} 
-          onClose={() => setEditingCustomer(null)}
-        >
-          {/* Добавлен key={editingCustomer.id}, чтобы React пересоздавал форму при смене клиента */}
+      {editingCustomer && !('id' in editingCustomer) && (
+        <Modal title="New Customer" onClose={() => setEditingCustomer(null)}>
           <CustomerForm
-            key={('id' in editingCustomer) ? editingCustomer.id : 'new'}
             initial={editingCustomer}
             onSave={handleSave}
             onClose={() => setEditingCustomer(null)}
-            onCreateShift={('id' in editingCustomer) ? () => {
-              setEditingCustomer(null)
-              navigate(`/shifts?new=1&customer_id=${editingCustomer.id}`)
-            } : undefined}
           />
         </Modal>
       )}

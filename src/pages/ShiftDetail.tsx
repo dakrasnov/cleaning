@@ -7,7 +7,7 @@ import { useEmployeesStore } from '@/store/employees'
 import { useAssignmentsStore } from '@/store/assignments'
 import { Badge, BackBtn, Btn, Card, ConfirmSheet, Modal } from '@/components/ui'
 import { ShiftForm } from './Shifts'
-import { fmtDate, fmtTime } from '@/lib/utils'
+import { fmtDate, durHHMM, durationHrs, fmtAmount } from '@/lib/utils'
 
 const NAVY = '#0F2041'
 const MINT = '#00C9A7'
@@ -28,27 +28,30 @@ export default function ShiftDetailPage() {
 
   const customer = customers.find(c => c.id === shift.customer_id)
   const assignment = assignments.find(a => a.shift_id === id)
+  const shiftDurHrs = durationHrs(shift.time_start, shift.time_end)
+
+  const customerCost = customer ? fmtAmount(customer.price * shiftDurHrs + customer.overhead) : '—'
 
   return (
     <div>
       <BackBtn onClick={() => navigate('/shifts')} />
       <div className="flex justify-between items-start mb-5">
         <div>
-          <h2 className="font-heading text-2xl font-bold" style={{ color: NAVY }}>{customer?.name}</h2>
-          <div className="text-sm text-gray-500">{fmtDate(shift.date)} · {fmtTime(shift.time_start)} – {fmtTime(shift.time_end)}</div>
+          <h2
+            className="font-heading text-2xl font-bold cursor-pointer hover:opacity-75 transition-opacity"
+            style={{ color: NAVY }}
+            onClick={() => customer && navigate(`/customers/${customer.id}`)}
+          >{customer?.name}</h2>
+          <div className="text-sm text-gray-500">
+            {fmtDate(shift.date)} · {shift.time_start} – {shift.time_end}
+          </div>
+          <div className="text-base font-bold mt-1" style={{ color: NAVY }}>
+            {durHHMM(shift.time_start, shift.time_end)} duration
+          </div>
         </div>
         <div className="flex flex-col items-end gap-2">
           <Badge status={shift.status} />
-          <div className="flex gap-2">
-            {shift.status === 'confirmed' && (
-              <Btn small variant="primary" onClick={async () => {
-                await update(shift.id, { status: 'completed' })
-                toast.success('Shift marked as completed')
-              }}>Complete</Btn>
-            )}
-            <Btn small variant="secondary" onClick={() => setShowEdit(true)}>Edit</Btn>
-            <Btn small variant="danger" onClick={() => setShowDelete(true)}>Delete</Btn>
-          </div>
+          <Btn small variant="secondary" onClick={() => setShowEdit(true)}>Edit</Btn>
         </div>
       </div>
 
@@ -58,10 +61,23 @@ export default function ShiftDetailPage() {
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Address</div>
             <a href={customer?.google_maps_link || '#'} target="_blank" rel="noopener noreferrer" className="no-underline" style={{ color: NAVY }}>{customer?.address} 📍</a>
           </div>
-          <div>
-            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Rate</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>${customer?.price}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-500">For Customer</span>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>{customerCost}</span>
           </div>
+          {assignment && assignment.employee_ids.map(eid => {
+            const emp = employees.find(e => e.id === eid)
+            if (!emp) return null
+            const sal = fmtAmount(emp.salary * shiftDurHrs + emp.overhead)
+            return (
+              <div key={eid} className="flex justify-between items-center">
+                <span className="text-sm text-gray-500">
+                  To Employee{assignment.employee_ids.length > 1 ? ` (${emp.name})` : ''}
+                </span>
+                <span className="font-extrabold text-xl" style={{ color: MINT }}>{sal}</span>
+              </div>
+            )
+          })}
           {shift.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{shift.comment}</p></div>}
         </div>
       </Card>
@@ -73,7 +89,11 @@ export default function ShiftDetailPage() {
             const emp = employees.find(e => e.id === eid)
             return (
               <div key={eid} className="py-2 border-b last:border-0 border-gray-100 flex justify-between items-center">
-                <span className="font-semibold" style={{ color: NAVY }}>{emp?.name}</span>
+                <span
+                  className="font-semibold cursor-pointer hover:opacity-75 transition-opacity"
+                  style={{ color: NAVY }}
+                  onClick={() => navigate(`/employees/${eid}`)}
+                >{emp?.name}</span>
                 {assignment.confirmed_by === eid && <span className="text-xs font-bold" style={{ color: MINT }}>✓ Confirmed</span>}
               </div>
             )
@@ -90,7 +110,12 @@ export default function ShiftDetailPage() {
       )}
 
       {showEdit && <Modal title="Edit Shift" onClose={() => setShowEdit(false)}>
-        <ShiftForm initial={shift} onSave={async (data) => { await update(shift.id, data); toast.success('Shift updated'); setShowEdit(false) }} onClose={() => setShowEdit(false)} />
+        <ShiftForm
+          initial={shift}
+          onSave={async (data) => { await update(shift.id, data); toast.success('Shift updated'); setShowEdit(false) }}
+          onClose={() => setShowEdit(false)}
+          onDelete={() => { setShowEdit(false); setShowDelete(true) }}
+        />
       </Modal>}
       {showDelete && <ConfirmSheet msg="Delete this shift? This cannot be undone."
         onConfirm={async () => { await remove(shift.id); toast.success('Shift deleted'); navigate('/shifts') }}

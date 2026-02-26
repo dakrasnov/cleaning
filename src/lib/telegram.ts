@@ -5,10 +5,12 @@ export interface TelegramShiftPayload {
   customerName: string
   shiftId: string
   address: string
-  date: string       // 'YYYY-MM-DD'
-  timeStart: string  // 'HH:MM'
-  timeEnd: string    // 'HH:MM'
-  price: number
+  googleMapsLink?: string
+  date: string          // 'YYYY-MM-DD'
+  timeStart: string     // 'HH:MM'
+  timeEnd: string       // 'HH:MM'
+  employeeSalary: number
+  employeeOverhead: number
   comment: string
 }
 
@@ -25,17 +27,20 @@ export function buildShiftMessage(p: TelegramShiftPayload): string {
   const duration = mins === 0 ? `${hrs} hrs` : `${hrs} hrs ${mins} min`
 
   const formattedDate = `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`
-  const timeStart = p.timeStart.slice(0, 5)  // HH:MM
-  const timeEnd = p.timeEnd.slice(0, 5)      // HH:MM
+  const timeStart = p.timeStart.slice(0, 5)
+
+  const durationHours = totalMins / 60
+  const payment = Math.round(p.employeeSalary * durationHours + p.employeeOverhead)
 
   const lines = [
     `${p.employeeName}, Вы назначены на смену!`,
-    `🗓️ Дата: ${formattedDate}, ${dayName}`,
-    `⏰ Время: ${timeStart} – ${timeEnd}, ${duration}`,
+    `🗓️ ${formattedDate}, ${dayName}`,
+    `⏰ ${timeStart}, ${duration}`,
     `👤 Клиент: ${p.customerName}`,
     `📍 Адрес: ${p.address}`,
-    `💰 Ставка: ${p.price}`,
   ]
+  if (p.googleMapsLink) lines.push(`📍 Ссылка: ${p.googleMapsLink}`)
+  lines.push(`💰 Оплата: ${payment}`)
   if (p.comment) lines.push(`📝 Комментарий: ${p.comment}`)
   return lines.join('\n')
 }
@@ -52,7 +57,7 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
     const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
     })
     const data = await res.json()
     return data.ok === true
@@ -75,6 +80,7 @@ export async function sendTelegramWithConfirmation(chatId: string, text: string,
         chat_id: chatId,
         text: text + '\n\n❓ Подтвердите Ваш выход',
         parse_mode: 'HTML',
+        disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [[
             { text: 'Да ✅', callback_data: `confirm_${assignmentId}` },

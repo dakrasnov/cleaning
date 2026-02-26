@@ -9,7 +9,7 @@ import { useAccrualsStore } from '@/store/accruals'
 import { usePaymentsStore } from '@/store/payments'
 import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Textarea } from '@/components/ui'
 import { EmployeeForm } from './Employees'
-import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+import { fmtDate, fmtDateShort, fmtTime, fmtAmount, durHHMM, todayStr } from '@/lib/utils'
 import type { Shift } from '@/types'
 
 const NAVY = '#0F2041'
@@ -72,12 +72,14 @@ export default function EmployeeDetailPage() {
   const allTransactions = [
     ...empAccruals.map(a => {
       const shift = shifts.find(s => s.id === a.shift_id)
+      const cust = customers.find(c => c.id === shift?.customer_id)
       return {
         id: a.id,
         date: shift?.date ?? a.created_at.slice(0, 10),
         amount: a.amount,
         note: a.note,
         type: 'accrual' as const,
+        label: cust?.name ?? 'Shift',
       }
     }),
     ...empPayments.map(p => ({
@@ -86,6 +88,7 @@ export default function EmployeeDetailPage() {
       amount: -p.amount,
       note: p.note,
       type: 'payment' as const,
+      label: 'Payment',
     })),
   ].sort((a, b) => b.date.localeCompare(a.date))
 
@@ -124,9 +127,9 @@ export default function EmployeeDetailPage() {
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Phone</div>
             <a href={`tel:${employee.phone}`} className="font-semibold no-underline" style={{ color: MINT }}>{employee.phone}</a></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hourly Salary</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>{employee.salary}/hr</span></div>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>{fmtAmount(employee.salary)}/hr</span></div>
           <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Overhead</div>
-            <span className="font-semibold">{employee.overhead}</span></div>
+            <span className="font-semibold">{fmtAmount(employee.overhead)}</span></div>
           {employee.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{employee.comment}</p></div>}
         </div>
       </Card>
@@ -158,8 +161,8 @@ export default function EmployeeDetailPage() {
             <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-bold">{fmtDate(s.date)} {fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
-                  <div className="text-sm text-gray-500 mt-0.5">{cust?.name}</div>
+                  <div className="text-sm font-semibold">{fmtDateShort(s.date)}&nbsp;&nbsp;{s.time_start.slice(0, 5)}&nbsp;&nbsp;{durHHMM(s.time_start, s.time_end)}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{cust?.name}</div>
                 </div>
                 <Badge status={s.status} />
               </div>
@@ -177,16 +180,16 @@ export default function EmployeeDetailPage() {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Accrued</div>
-            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{totalAccrued.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#10B981' }}>{fmtAmount(totalAccrued)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Paid</div>
-            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{totalPaid.toFixed(2)}</div>
+            <div className="font-extrabold text-lg" style={{ color: '#3B82F6' }}>{fmtAmount(totalPaid)}</div>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Balance</div>
             <div className="font-extrabold text-lg" style={{ color: balance < 0 ? '#E53E3E' : balance > 0 ? '#10B981' : '#718096' }}>
-              {balance.toFixed(2)}
+              {fmtAmount(balance)}
             </div>
           </div>
         </div>
@@ -198,10 +201,13 @@ export default function EmployeeDetailPage() {
           <div key={t.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
             <div>
               <div className="text-sm font-semibold" style={{ color: NAVY }}>{fmtDate(t.date)}</div>
-              <div className="text-xs text-gray-400">{t.type === 'accrual' ? 'Shift' : 'Payment'}</div>
+              <div className="text-xs text-gray-400">{t.label}</div>
+              {t.type === 'payment' && t.note && (
+                <div className="text-xs text-gray-400 italic">{t.note}</div>
+              )}
             </div>
             <div className="font-bold" style={{ color: t.type === 'accrual' ? '#10B981' : '#3B82F6' }}>
-              {t.type === 'accrual' ? '+' : ''}{t.amount.toFixed(2)}
+              {t.type === 'accrual' ? '+' : ''}{fmtAmount(t.amount)}
             </div>
           </div>
         ))}
@@ -218,7 +224,7 @@ export default function EmployeeDetailPage() {
       {showPayment && (
         <Modal title="Record Payment" onClose={() => setShowPayment(false)}>
           <div className="mb-4 px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: '#F0F2F5', color: NAVY }}>
-            Outstanding Balance: <span style={{ color: balance < 0 ? '#E53E3E' : '#10B981' }}>{balance.toFixed(2)}</span>
+            Outstanding Balance: <span style={{ color: balance < 0 ? '#E53E3E' : '#10B981' }}>{fmtAmount(balance)}</span>
           </div>
           <Field label="Amount *">
             <input

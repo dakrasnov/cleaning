@@ -108,10 +108,12 @@ export default function AssignmentsPage() {
         customerName: customer.name,
         shiftId: shift.id,
         address: customer.address,
+        googleMapsLink: customer.google_maps_link || undefined,
         date: shift.date,
         timeStart: shift.time_start,
         timeEnd: shift.time_end,
-        price: customer.price,
+        employeeSalary: emp.salary,
+        employeeOverhead: emp.overhead,
         comment: shift.comment,
       })
       const ok = assignmentId
