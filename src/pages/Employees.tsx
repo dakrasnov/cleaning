@@ -60,7 +60,7 @@ export const EmployeeForm = ({ initial, onSave, onClose }: { initial?: Partial<F
 
 export default function EmployeesPage() {
   const navigate = useNavigate()
-  const { employees, loading, create } = useEmployeesStore()
+  const { employees, loading, create, fetch } = useEmployeesStore()
   const accruals = useAccrualsStore(s => s.accruals)
   const payments = usePaymentsStore(s => s.payments)
   const [search, setSearch] = useState('')
@@ -74,8 +74,13 @@ export default function EmployeesPage() {
 
   const handleCreate = async (data: FormData) => {
     const result = await create(data as Omit<Employee, 'id' | 'created_at'>)
-    if (result) { toast.success('Employee added'); setShowForm(false) }
-    else toast.error('Failed to add employee')
+    if (result) {
+      await fetch()
+      toast.success('Employee added')
+      setShowForm(false)
+    } else {
+      toast.error('Failed to add employee')
+    }
   }
 
   return (

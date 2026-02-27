@@ -49,7 +49,7 @@ const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: P
 
 export default function CustomersPage() {
   const navigate = useNavigate()
-  const { customers, loading, create, update } = useCustomersStore()
+  const { customers, loading, create, update, fetch } = useCustomersStore()
   const shifts = useShiftsStore(s => s.shifts)
   const today = todayStr()
   const [search, setSearch] = useState('')
@@ -65,12 +65,14 @@ export default function CustomersPage() {
     if (editingCustomer && 'id' in editingCustomer) {
       const result = await update(editingCustomer.id, data)
       if (result) {
+        await fetch()
         toast.success('Customer updated')
         setEditingCustomer(null)
       }
     } else {
       const result = await create(data)
       if (result) {
+        await fetch()
         toast.success('Customer added')
         setEditingCustomer(null)
       }

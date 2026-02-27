@@ -18,7 +18,7 @@ const MINT = '#00C9A7'
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { employees, update, remove } = useEmployeesStore()
+  const { employees, update, remove, fetch } = useEmployeesStore()
   const shifts = useShiftsStore(s => s.shifts)
   const customers = useCustomersStore(s => s.customers)
   const assignments = useAssignmentsStore(s => s.assignments)
@@ -214,7 +214,7 @@ export default function EmployeeDetailPage() {
       </>}
 
       {showEdit && <Modal title="Edit Employee" onClose={() => setShowEdit(false)}>
-        <EmployeeForm initial={employee} onSave={async (data) => { await update(employee.id, data); toast.success('Employee updated'); setShowEdit(false) }} onClose={() => setShowEdit(false)} />
+        <EmployeeForm initial={employee} onSave={async (data) => { await update(employee.id, data); await fetch(); toast.success('Employee updated'); setShowEdit(false) }} onClose={() => setShowEdit(false)} />
       </Modal>}
 
       {showDelete && <ConfirmSheet msg="Delete this employee? This cannot be undone."

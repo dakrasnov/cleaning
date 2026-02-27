@@ -50,12 +50,23 @@ const AdminLayout = () => {
   const fetchPayments    = usePaymentsStore(s => s.fetch)
 
   useEffect(() => {
-    fetchCustomers()
-    fetchEmployees()
-    fetchShifts()
-    fetchAssignments()
-    fetchAccruals()
-    fetchPayments()
+    const fetchAll = () => {
+      fetchCustomers()
+      fetchEmployees()
+      fetchShifts()
+      fetchAssignments()
+      fetchAccruals()
+      fetchPayments()
+    }
+
+    fetchAll()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchAll()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
   const hideNav = location.pathname.split('/').filter(Boolean).length >= 2

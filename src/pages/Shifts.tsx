@@ -168,7 +168,7 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
 export default function ShiftsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { shifts, loading, create } = useShiftsStore()
+  const { shifts, loading, create, fetch } = useShiftsStore()
   const customers = useCustomersStore(s => s.customers)
 
   const [statusFilter, setStatusFilter] = useState('all')
@@ -199,6 +199,7 @@ export default function ShiftsPage() {
   const handleCreate = async (data: FormData) => {
     const result = await create(data as Omit<Shift, 'id' | 'created_at'>)
     if (result) {
+      await fetch()
       toast.success('Shift created')
       setShowForm(false)
       navigate(`/shifts/${result.id}`)

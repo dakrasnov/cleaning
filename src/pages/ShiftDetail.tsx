@@ -15,7 +15,7 @@ const MINT = '#00C9A7'
 export default function ShiftDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { shifts, update, remove } = useShiftsStore()
+  const { shifts, update, remove, fetch } = useShiftsStore()
   const customers = useCustomersStore(s => s.customers)
   const employees = useEmployeesStore(s => s.employees)
   const assignments = useAssignmentsStore(s => s.assignments)
@@ -112,7 +112,7 @@ export default function ShiftDetailPage() {
       {showEdit && <Modal title="Edit Shift" onClose={() => setShowEdit(false)}>
         <ShiftForm
           initial={shift}
-          onSave={async (data) => { await update(shift.id, data); toast.success('Shift updated'); setShowEdit(false) }}
+          onSave={async (data) => { await update(shift.id, data); await fetch(); toast.success('Shift updated'); setShowEdit(false) }}
           onClose={() => setShowEdit(false)}
           onDelete={() => { setShowEdit(false); setShowDelete(true) }}
         />

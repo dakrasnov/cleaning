@@ -16,8 +16,8 @@ const MINT_LIGHT = '#E0FAF6'
 
 export default function AssignmentsPage() {
   const [searchParams] = useSearchParams()
-  const { assignments, loading, create, update, remove } = useAssignmentsStore()
-  const { shifts, update: updateShift } = useShiftsStore()
+  const { assignments, loading, create, update, remove, fetch } = useAssignmentsStore()
+  const { shifts, update: updateShift, fetch: fetchShifts } = useShiftsStore()
   const customers = useCustomersStore(s => s.customers)
   const employees = useEmployeesStore(s => s.employees)
 
@@ -138,6 +138,8 @@ export default function AssignmentsPage() {
     })
     if (result) {
       await updateShift(selShift, { status: 'confirmed' })
+      await fetch()
+      await fetchShifts()
       toast.success('Assignment created')
       closeModal()
       await notifyEmployees(selShift, empIds, result.id)
@@ -153,6 +155,8 @@ export default function AssignmentsPage() {
     if (empIds.length === 0) {
       await remove(editingAssignment.id)
       await updateShift(oldShiftId, { status: 'open' })
+      await fetch()
+      await fetchShifts()
       toast.success('Assignment removed, shift reopened')
       closeModal()
       return
@@ -168,6 +172,8 @@ export default function AssignmentsPage() {
       await updateShift(oldShiftId, { status: 'open' })
       await updateShift(selShift, { status: 'confirmed' })
     }
+    await fetch()
+    await fetchShifts()
     toast.success('Assignment updated')
     closeModal()
   }
