@@ -8,6 +8,8 @@ export interface PaymentInfo {
   amount: number
   paid: boolean
   confirmed?: boolean
+  hour_rate?: number
+  overhead?: number
 }
 
 export interface Customer {

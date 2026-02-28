@@ -5,7 +5,7 @@ import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
 import { useEmployeesStore } from '@/store/employees'
 import { useAssignmentsStore } from '@/store/assignments'
-import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Modal, Select } from '@/components/ui'
+import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Select } from '@/components/ui'
 import { ShiftForm } from './Shifts'
 import { fmtDate, durHHMM, durationHrs, fmtAmount } from '@/lib/utils'
 import { buildShiftMessage, buildCancellationMessage, sendTelegramMessage, sendTelegramWithConfirmation } from '@/lib/telegram'
@@ -28,6 +28,12 @@ export default function ShiftDetailPage() {
   const [slot1, setSlot1] = useState('')
   const [slot2, setSlot2] = useState('')
   const [slot3, setSlot3] = useState('')
+  const [rate1, setRate1] = useState(0)
+  const [over1, setOver1] = useState(0)
+  const [rate2, setRate2] = useState(0)
+  const [over2, setOver2] = useState(0)
+  const [rate3, setRate3] = useState(0)
+  const [over3, setOver3] = useState(0)
 
   if (!shift) return <div className="p-8 text-center text-gray-400">Shift not found</div>
 
@@ -39,9 +45,16 @@ export default function ShiftDetailPage() {
   const customerCost = customer ? fmtAmount(customer.price * shiftDurHrs * (shift.coef ?? 1) + customer.overhead) : '—'
 
   const openAssignEdit = () => {
-    setSlot1(assignment?.employee_ids[0] ?? '')
-    setSlot2(assignment?.employee_ids[1] ?? '')
-    setSlot3(assignment?.employee_ids[2] ?? '')
+    const ids = assignment?.employee_ids ?? []
+    setSlot1(ids[0] ?? ''); setSlot2(ids[1] ?? ''); setSlot3(ids[2] ?? '')
+    const getPI = (idx: number) => {
+      const pi = assignment?.payment_info?.find(p => p.employee_id === ids[idx])
+      const emp = employees.find(e => e.id === ids[idx])
+      return { r: pi?.hour_rate ?? emp?.salary ?? 0, o: pi?.overhead ?? emp?.overhead ?? 0 }
+    }
+    const r0 = getPI(0); setRate1(r0.r); setOver1(r0.o)
+    const r1 = getPI(1); setRate2(r1.r); setOver2(r1.o)
+    const r2 = getPI(2); setRate3(r2.r); setOver3(r2.o)
     setShowAssignEdit(true)
   }
 
@@ -85,15 +98,23 @@ export default function ShiftDetailPage() {
       return
     }
 
+    const slotRates = [
+      { id: slot1, r: rate1, o: over1 },
+      { id: slot2, r: rate2, o: over2 },
+      { id: slot3, r: rate3, o: over3 },
+    ]
     const paymentInfo = empIds.map(eid => {
       const existing = assignment?.payment_info?.find(p => p.employee_id === eid)
-      const emp = employees.find(e => e.id === eid)
-      const amount = emp ? Math.round(shiftDurHrs * emp.salary + emp.overhead) : 0
+      const s = slotRates.find(d => d.id === eid)
+      const hourRate = s?.r ?? 0
+      const overhead = s?.o ?? 0
       return {
         employee_id: eid,
-        amount,
+        amount: Math.round(shiftDurHrs * hourRate + overhead),
         paid: existing?.paid ?? false,
         confirmed: existing?.confirmed ?? false,
+        hour_rate: hourRate,
+        overhead,
       }
     })
 
@@ -178,7 +199,10 @@ export default function ShiftDetailPage() {
           {assignment && assignment.employee_ids.map(eid => {
             const emp = employees.find(e => e.id === eid)
             if (!emp) return null
-            const sal = fmtAmount(emp.salary * shiftDurHrs + emp.overhead)
+            const pi = assignment.payment_info?.find(p => p.employee_id === eid)
+            const hourRate = pi?.hour_rate ?? emp.salary
+            const empOverhead = pi?.overhead ?? emp.overhead
+            const sal = fmtAmount(hourRate * shiftDurHrs + empOverhead)
             return (
               <div key={eid} className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">
@@ -241,29 +265,74 @@ export default function ShiftDetailPage() {
       {showAssignEdit && (
         <Modal title={assignment ? 'Edit Assignment' : 'Create Assignment'} onClose={() => setShowAssignEdit(false)}>
           <Field label="Employee 1 *">
-            <Select value={slot1} onChange={e => setSlot1(e.target.value)}>
+            <Select value={slot1} onChange={e => {
+              const empId = e.target.value
+              setSlot1(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate1(emp?.salary ?? 0); setOver1(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Select employee --</option>
               {activeEmployees.filter(e => e.id !== slot2 && e.id !== slot3).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot1 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate1} onChange={e => setRate1(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over1} onChange={e => setOver1(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
           <Field label="Employee 2">
-            <Select value={slot2} onChange={e => setSlot2(e.target.value)}>
+            <Select value={slot2} onChange={e => {
+              const empId = e.target.value
+              setSlot2(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate2(emp?.salary ?? 0); setOver2(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Not needed --</option>
               {activeEmployees.filter(e => e.id !== slot1 && e.id !== slot3).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot2 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate2} onChange={e => setRate2(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over2} onChange={e => setOver2(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
           <Field label="Employee 3">
-            <Select value={slot3} onChange={e => setSlot3(e.target.value)}>
+            <Select value={slot3} onChange={e => {
+              const empId = e.target.value
+              setSlot3(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate3(emp?.salary ?? 0); setOver3(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Not needed --</option>
               {activeEmployees.filter(e => e.id !== slot1 && e.id !== slot2).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot3 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate3} onChange={e => setRate3(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over3} onChange={e => setOver3(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
           <div className="flex gap-3 mt-2">
             <Btn variant="secondary" full onClick={() => setShowAssignEdit(false)}>Cancel</Btn>
             <Btn full onClick={handleAssignSave}>Save</Btn>

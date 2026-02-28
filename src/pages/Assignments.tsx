@@ -30,6 +30,12 @@ export default function AssignmentsPage() {
   const [slot1, setSlot1] = useState('')
   const [slot2, setSlot2] = useState('')
   const [slot3, setSlot3] = useState('')
+  const [rate1, setRate1] = useState(0)
+  const [over1, setOver1] = useState(0)
+  const [rate2, setRate2] = useState(0)
+  const [over2, setOver2] = useState(0)
+  const [rate3, setRate3] = useState(0)
+  const [over3, setOver3] = useState(0)
   const [editStatus, setEditStatus] = useState<AssignmentStatus>('assigned')
 
   useEffect(() => {
@@ -38,38 +44,58 @@ export default function AssignmentsPage() {
 
   const activeEmployees = employees.filter(e => e.status === 'active')
 
-  const calcAmount = (empId: string, shiftId: string): number => {
-    const emp = employees.find(e => e.id === empId)
+  const calcAmount = (shiftId: string, hourRate: number, overhead: number): number => {
     const shift = shifts.find(s => s.id === shiftId)
-    if (!emp || !shift) return 0
+    if (!shift) return 0
     const [sh, sm] = shift.time_start.split(':').map(Number)
     const [eh, em] = shift.time_end.split(':').map(Number)
     const hours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
-    return Math.round(hours * (emp.salary ?? 0) + (emp.overhead ?? 0))
+    return Math.round(hours * hourRate + overhead)
   }
 
-  const buildPaymentInfo = (empIds: string[], shiftId: string): PaymentInfo[] =>
-    empIds.map(empId => ({
-      employee_id: empId,
-      amount: calcAmount(empId, shiftId),
-      paid: false,
-    }))
+  const buildPaymentInfo = (empIds: string[], shiftId: string): PaymentInfo[] => {
+    const slotData = [
+      { id: slot1, hourRate: rate1, overhead: over1 },
+      { id: slot2, hourRate: rate2, overhead: over2 },
+      { id: slot3, hourRate: rate3, overhead: over3 },
+    ]
+    return empIds.map(empId => {
+      const s = slotData.find(d => d.id === empId)
+      const hourRate = s?.hourRate ?? 0
+      const overhead = s?.overhead ?? 0
+      return {
+        employee_id: empId,
+        amount: calcAmount(shiftId, hourRate, overhead),
+        paid: false,
+        hour_rate: hourRate,
+        overhead,
+      }
+    })
+  }
 
   const openCreate = (prefilledShiftId = '') => {
     setSelShift(prefilledShiftId)
     setLockedShiftId(prefilledShiftId)
-    setSlot1('')
-    setSlot2('')
-    setSlot3('')
+    setSlot1(''); setSlot2(''); setSlot3('')
+    setRate1(0); setOver1(0)
+    setRate2(0); setOver2(0)
+    setRate3(0); setOver3(0)
     setEditingAssignment(null)
     setModalMode('create')
   }
 
   const openEdit = (a: Assignment) => {
     setSelShift(a.shift_id)
-    setSlot1(a.employee_ids[0] ?? '')
-    setSlot2(a.employee_ids[1] ?? '')
-    setSlot3(a.employee_ids[2] ?? '')
+    const ids = a.employee_ids
+    setSlot1(ids[0] ?? ''); setSlot2(ids[1] ?? ''); setSlot3(ids[2] ?? '')
+    const getPI = (idx: number) => {
+      const pi = a.payment_info?.find(p => p.employee_id === ids[idx])
+      const emp = employees.find(e => e.id === ids[idx])
+      return { r: pi?.hour_rate ?? emp?.salary ?? 0, o: pi?.overhead ?? emp?.overhead ?? 0 }
+    }
+    const r0 = getPI(0); setRate1(r0.r); setOver1(r0.o)
+    const r1 = getPI(1); setRate2(r1.r); setOver2(r1.o)
+    const r2 = getPI(2); setRate3(r2.r); setOver3(r2.o)
     setEditStatus((a.status ?? 'assigned') as AssignmentStatus)
     setEditingAssignment(a)
     setModalMode('edit')
@@ -78,11 +104,11 @@ export default function AssignmentsPage() {
   const closeModal = () => {
     setModalMode(null)
     setEditingAssignment(null)
-    setSelShift('')
-    setLockedShiftId('')
-    setSlot1('')
-    setSlot2('')
-    setSlot3('')
+    setSelShift(''); setLockedShiftId('')
+    setSlot1(''); setSlot2(''); setSlot3('')
+    setRate1(0); setOver1(0)
+    setRate2(0); setOver2(0)
+    setRate3(0); setOver3(0)
   }
 
   const openShifts = shifts.filter(s => s.status === 'open')
@@ -255,36 +281,83 @@ export default function AssignmentsPage() {
           )}
 
           <Field label="Employee 1 *">
-            <Select value={slot1} onChange={e => setSlot1(e.target.value)}>
+            <Select value={slot1} onChange={e => {
+              const empId = e.target.value
+              setSlot1(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate1(emp?.salary ?? 0); setOver1(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Select employee --</option>
               {activeEmployees.filter(e => e.id !== slot2 && e.id !== slot3).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot1 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate1} onChange={e => setRate1(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over1} onChange={e => setOver1(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
           <Field label="Employee 2">
-            <Select value={slot2} onChange={e => setSlot2(e.target.value)}>
+            <Select value={slot2} onChange={e => {
+              const empId = e.target.value
+              setSlot2(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate2(emp?.salary ?? 0); setOver2(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Not needed --</option>
               {activeEmployees.filter(e => e.id !== slot1 && e.id !== slot3).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot2 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate2} onChange={e => setRate2(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over2} onChange={e => setOver2(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
           <Field label="Employee 3">
-            <Select value={slot3} onChange={e => setSlot3(e.target.value)}>
+            <Select value={slot3} onChange={e => {
+              const empId = e.target.value
+              setSlot3(empId)
+              const emp = employees.find(e => e.id === empId)
+              setRate3(emp?.salary ?? 0); setOver3(emp?.overhead ?? 0)
+            }}>
               <option value="">-- Not needed --</option>
               {activeEmployees.filter(e => e.id !== slot1 && e.id !== slot2).map(e => (
                 <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </Select>
           </Field>
+          {slot3 && (
+            <div className="grid grid-cols-2 gap-2 -mt-2 mb-2 pl-4">
+              <Field label="Hour Rate">
+                <Input type="number" min="0" value={rate3} onChange={e => setRate3(Number(e.target.value))} />
+              </Field>
+              <Field label="Overhead">
+                <Input type="number" min="0" value={over3} onChange={e => setOver3(Number(e.target.value))} />
+              </Field>
+            </div>
+          )}
 
           {selShift && selEmpIds.length > 0 && (
             <div className="mb-4 rounded-xl p-3" style={{ background: MINT_LIGHT }}>
               <div className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Payment</div>
               {selEmpIds.map(empId => {
                 const emp = employees.find(e => e.id === empId)!
-                const amount = calcAmount(empId, selShift)
+                const hourRate = empId === slot1 ? rate1 : empId === slot2 ? rate2 : rate3
+                const overhead = empId === slot1 ? over1 : empId === slot2 ? over2 : over3
+                const amount = calcAmount(selShift, hourRate, overhead)
                 return (
                   <div key={empId} className="flex justify-between items-center py-1.5">
                     <span className="text-sm font-semibold" style={{ color: NAVY }}>{emp?.name}</span>
