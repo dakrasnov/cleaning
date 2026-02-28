@@ -54,7 +54,7 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
     set({ shifts: get().shifts.map(s => s.id === id ? { ...s, ...data } : s) })
 
     // Accrual trigger: completing a shift creates accruals for assigned employees.
-    // Each employee earns: (shift duration in hours × their salary) + their overhead
+    // Amount is taken from assignment payment_info (shift-specific rate); falls back to employee salary × hours + overhead.
     if (data.status === 'completed' && prevShift?.status !== 'completed') {
       const shift = get().shifts.find(s => s.id === id)
       const { assignments } = useAssignmentsStore.getState()
@@ -63,8 +63,9 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
       if (shift && assignment && assignment.employee_ids.length > 0) {
         const durationHours = (toMinutes(shift.time_end) - toMinutes(shift.time_start)) / 60
         const entries = assignment.employee_ids.map(eid => {
+          const pi = assignment.payment_info?.find(p => p.employee_id === eid)
           const emp = employees.find(e => e.id === eid)
-          const amount = emp ? durationHours * emp.salary + emp.overhead : 0
+          const amount = pi?.amount ?? (emp ? durationHours * emp.salary + emp.overhead : 0)
           return { employee_id: eid, amount }
         })
         await useAccrualsStore.getState().createForShift(id, entries)
