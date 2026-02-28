@@ -58,31 +58,26 @@ Deno.serve(async (req) => {
     // ── Shift start: confirm ──────────────────────────────────────────────
     if (callbackData.startsWith('confirm_')) {
       const assignmentId = callbackData.slice('confirm_'.length)
-      console.log(`Looking up employee for telegram_chat_id=${chatId}`)
+      console.log(`confirm_ from chatId=${chatId}, assignmentId=${assignmentId}`)
 
+      // Find employee by telegram chat ID
       const { data: emps, error: empError } = await supabase
         .from('employees')
         .select('id, name')
         .eq('telegram_chat_id', String(chatId))
 
-      if (empError) {
+      if (empError || !emps?.length) {
         console.error('Employee lookup error:', empError)
-        await sendMessage(chatId, '❌ Ошибка при поиске сотрудника. Попробуйте позже.')
-        return new Response('OK')
-      }
-
-      const employee = emps?.[0]
-      if (!employee) {
-        console.error(`No employee found for telegram_chat_id=${chatId}`)
         await sendMessage(chatId, `❌ Ваш Telegram (ID: ${chatId}) не привязан ни к одному сотруднику.\n\nПередайте этот ID менеджеру.`)
         return new Response('OK')
       }
+      const employee = emps[0]
+      console.log(`Employee: ${employee.name} (${employee.id})`)
 
-      console.log(`Found employee: ${employee.name} (${employee.id}), looking up assignment ${assignmentId}`)
-
+      // Fetch full assignment including payment_info and employee_ids
       const { data: assignment, error: assignError } = await supabase
         .from('assignments')
-        .select('id, status')
+        .select('id, shift_id, employee_ids, payment_info, confirmed_by')
         .eq('id', assignmentId)
         .single()
 
@@ -92,17 +87,34 @@ Deno.serve(async (req) => {
         return new Response('OK')
       }
 
-      if (assignment.status === 'confirmed') {
-        await sendMessage(chatId, '⚠️ Смена уже подтверждена.')
+      // Check if this employee already confirmed
+      const paymentInfo: any[] = assignment.payment_info ?? []
+      const myEntry = paymentInfo.find((p: any) => p.employee_id === employee.id)
+      if (myEntry?.confirmed) {
+        await sendMessage(chatId, '⚠️ Вы уже подтвердили эту смену.')
         return new Response('OK')
       }
 
+      // Mark this employee as confirmed in payment_info
+      const updatedPaymentInfo = myEntry
+        ? paymentInfo.map((p: any) =>
+            p.employee_id === employee.id ? { ...p, confirmed: true } : p
+          )
+        : [...paymentInfo, { employee_id: employee.id, amount: 0, paid: false, confirmed: true }]
+
+      // Check if ALL assigned employees have now confirmed
+      const allConfirmed = (assignment.employee_ids as string[]).every((eid: string) =>
+        updatedPaymentInfo.find((p: any) => p.employee_id === eid)?.confirmed === true
+      )
+
+      // Update assignment
       const { error: updateError } = await supabase
         .from('assignments')
         .update({
-          status: 'confirmed',
+          payment_info: updatedPaymentInfo,
           confirmed_by: employee.id,
           confirmed_at: new Date().toISOString(),
+          ...(allConfirmed ? { status: 'confirmed' } : {}),
         })
         .eq('id', assignmentId)
 
@@ -112,8 +124,24 @@ Deno.serve(async (req) => {
         return new Response('OK')
       }
 
-      console.log(`Assignment ${assignmentId} confirmed by ${employee.name}`)
-      await sendMessage(chatId, `✅ Отлично, ${employee.name}! Смена подтверждена.`)
+      // If all confirmed → flip shift to 'confirmed'
+      if (allConfirmed) {
+        const { error: shiftUpdateError } = await supabase
+          .from('shifts')
+          .update({ status: 'confirmed' })
+          .eq('id', assignment.shift_id)
+
+        if (shiftUpdateError) {
+          console.error('Shift status update error:', shiftUpdateError)
+        } else {
+          console.log(`Shift ${assignment.shift_id} → confirmed (all employees confirmed)`)
+        }
+
+        await sendMessage(chatId, `✅ Отлично, ${employee.name}! Все сотрудники подтвердили — смена подтверждена! 🎉`)
+      } else {
+        console.log(`Assignment ${assignmentId}: ${employee.name} confirmed, waiting for others`)
+        await sendMessage(chatId, `✅ ${employee.name}, ваше подтверждение записано! Ждём остальных сотрудников.`)
+      }
 
     // ── Shift start: decline ──────────────────────────────────────────────
     } else if (callbackData.startsWith('decline_')) {

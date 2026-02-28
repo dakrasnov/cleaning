@@ -120,6 +120,26 @@ CREATE INDEX ON public.employee_payments (employee_id);
 ALTER TABLE public.employee_payments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_payments" ON public.employee_payments FOR ALL USING (true) WITH CHECK (true);
 
+-- ─── MIGRATION: Assigned status + Coef + PaymentInfo ────────────────────────
+-- Run in Supabase Dashboard → SQL Editor
+
+-- 1. Add 'assigned' to shifts status check
+ALTER TABLE public.shifts DROP CONSTRAINT shifts_status_check;
+ALTER TABLE public.shifts ADD CONSTRAINT shifts_status_check
+  CHECK (status IN ('open', 'assigned', 'confirmed', 'cancelled', 'completed'));
+
+-- 2. Add coef column to shifts (coefficient 1/2/3)
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS coef integer NOT NULL DEFAULT 1
+  CHECK (coef IN (1, 2, 3));
+
+-- 3. Add status + payment_info to assignments (if not already present)
+ALTER TABLE public.assignments
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'assigned'
+    CHECK (status IN ('assigned', 'confirmed', 'completed'));
+
+ALTER TABLE public.assignments
+  ADD COLUMN IF NOT EXISTS payment_info jsonb NOT NULL DEFAULT '[]'::jsonb;
+
 -- ─── MIGRATION: Telegram Shift Completion Responses ──────────────────────────
 -- Tracks per-employee responses to the completion prompt (done / wip)
 -- Prevents re-notification and drives the shift→completed transition

@@ -13,8 +13,10 @@ const MINT = '#00C9A7'
 export default function EmployeeDashboard() {
   const { profile, user, signOut } = useAuthStore()
   const shifts = useShiftsStore(s => s.shifts)
+  const updateShift = useShiftsStore(s => s.update)
   const customers = useCustomersStore(s => s.customers)
   const assignments = useAssignmentsStore(s => s.assignments)
+  const updateAssignment = useAssignmentsStore(s => s.update)
   const employees = useEmployeesStore(s => s.employees)
   const fetchShifts = useShiftsStore(s => s.fetch)
   const fetchCustomers = useCustomersStore(s => s.fetch)
@@ -33,7 +35,6 @@ export default function EmployeeDashboard() {
   const myEmployee = employees.find(e => e.id === myEmployeeId)
   const today = todayStr()
 
-  // My confirmed upcoming shifts (assigned to me, future)
   const myAssignedShiftIds = assignments
     .filter(a => myEmployeeId && a.employee_ids.includes(myEmployeeId))
     .map(a => a.shift_id)
@@ -43,25 +44,56 @@ export default function EmployeeDashboard() {
     .sort((a, b) => a.date.localeCompare(b.date) || a.time_start.localeCompare(b.time_start))
     .slice(0, 7)
 
-  // Open shifts not overlapping with my confirmed shifts
   const myShiftTimes = myUpcomingShifts.map(s => ({ date: s.date, start: s.time_start, end: s.time_end }))
-
   const overlaps = (s: typeof shifts[0]) =>
-    myShiftTimes.some(t =>
-      t.date === s.date && t.start < s.time_end && t.end > s.time_start
-    )
+    myShiftTimes.some(t => t.date === s.date && t.start < s.time_end && t.end > s.time_start)
 
   const openShifts = shifts
     .filter(s => s.status === 'open' && s.date >= today && !overlaps(s))
     .sort((a, b) => a.date.localeCompare(b.date))
 
+  const handleConfirm = async (shiftId: string) => {
+    const assignment = assignments.find(a => a.shift_id === shiftId)
+    if (!assignment || !myEmployeeId) return
+
+    const updatedPaymentInfo = (assignment.payment_info ?? []).map(p =>
+      p.employee_id === myEmployeeId ? { ...p, confirmed: true } : p
+    )
+
+    const allConfirmed = assignment.employee_ids.every(eid =>
+      updatedPaymentInfo.find(p => p.employee_id === eid)?.confirmed === true
+    )
+
+    await updateAssignment(assignment.id, {
+      payment_info: updatedPaymentInfo,
+      confirmed_by: myEmployeeId,
+      confirmed_at: new Date().toISOString(),
+    })
+
+    if (allConfirmed) {
+      await updateShift(shiftId, { status: 'confirmed' })
+    }
+  }
+
+  const statusBadge = (status: string) => {
+    const styles: Record<string, { bg: string; color: string; label: string }> = {
+      assigned:  { bg: '#DBEAFE', color: '#1D4ED8', label: 'Assigned' },
+      confirmed: { bg: '#D1FAF3', color: '#00836D', label: 'Confirmed' },
+    }
+    const s = styles[status] ?? styles['assigned']
+    return (
+      <span style={{ background: s.bg, color: s.color, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
+        {s.label}
+      </span>
+    )
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F7FA', fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Header */}
       <div style={{ background: NAVY, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50 }}>
         <div>
           <span style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: '#fff', fontSize: 20, fontWeight: 800 }}>
-            🧹 CleanShift
+            🧹 Achla Bayit
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -76,7 +108,6 @@ export default function EmployeeDashboard() {
       </div>
 
       <div style={{ padding: '20px 16px', maxWidth: 480, margin: '0 auto' }}>
-        {/* Greeting */}
         <div style={{ marginBottom: 24 }}>
           <p style={{ color: '#718096', fontSize: 14 }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -86,7 +117,6 @@ export default function EmployeeDashboard() {
           </h2>
         </div>
 
-        {/* My upcoming shifts */}
         <div style={{ marginBottom: 32 }}>
           <h3 style={{ fontFamily: "'Bricolage Grotesque', sans-serif", fontSize: 18, color: NAVY, fontWeight: 700, marginBottom: 12 }}>
             Your Next 7 Shifts
@@ -95,11 +125,13 @@ export default function EmployeeDashboard() {
           {loading && <SkeletonList count={3} />}
 
           {!loading && myUpcomingShifts.length === 0 && (
-            <Empty icon="📭" title="No upcoming shifts" sub="You have no confirmed shifts scheduled. Check open shifts below." />
+            <Empty icon="📭" title="No upcoming shifts" sub="You have no shifts scheduled. Check open shifts below." />
           )}
 
           {!loading && myUpcomingShifts.map(s => {
             const cust = customers.find(c => c.id === s.customer_id)
+            const myAssignment = assignments.find(a => a.shift_id === s.id)
+            const myConfirmed = myAssignment?.payment_info?.find(p => p.employee_id === myEmployeeId)?.confirmed
             return (
               <div key={s.id} style={{ background: '#fff', borderRadius: 16, padding: '14px 16px', marginBottom: 10, boxShadow: '0 2px 10px rgba(15,32,65,0.07)', borderLeft: `4px solid ${MINT}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -107,9 +139,7 @@ export default function EmployeeDashboard() {
                     <div style={{ fontWeight: 700, color: NAVY, fontSize: 15 }}>{fmtDate(s.date)}</div>
                     <div style={{ color: '#718096', fontSize: 13 }}>{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
                   </div>
-                  <span style={{ background: '#D1FAF3', color: '#00836D', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
-                    Confirmed
-                  </span>
+                  {statusBadge(s.status)}
                 </div>
                 {cust && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F0F2F5' }}>
@@ -117,7 +147,17 @@ export default function EmployeeDashboard() {
                       style={{ color: '#718096', fontSize: 13, textDecoration: 'none' }}>
                       📍 {cust.address}
                     </a>
-                    <div style={{ color: MINT, fontWeight: 700, fontSize: 16, marginTop: 4 }}>${cust.price}</div>
+                    <div style={{ color: MINT, fontWeight: 700, fontSize: 16, marginTop: 4 }}>{cust.price}</div>
+                  </div>
+                )}
+                {!myConfirmed && (
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      onClick={() => handleConfirm(s.id)}
+                      style={{ width: '100%', background: MINT, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Confirm Shift
+                    </button>
                   </div>
                 )}
               </div>
@@ -125,7 +165,6 @@ export default function EmployeeDashboard() {
           })}
         </div>
 
-        {/* Open shifts available to claim */}
         <div>
           <h3 style={{ fontFamily: "'Bricolage Grotesque', sans-serif", fontSize: 18, color: NAVY, fontWeight: 700, marginBottom: 4 }}>
             Open Shifts
@@ -157,7 +196,7 @@ export default function EmployeeDashboard() {
                       style={{ color: '#718096', fontSize: 13, textDecoration: 'none' }}>
                       📍 {cust.address}
                     </a>
-                    <div style={{ color: MINT, fontWeight: 700, fontSize: 16, marginTop: 4 }}>${cust.price}</div>
+                    <div style={{ color: MINT, fontWeight: 700, fontSize: 16, marginTop: 4 }}>{cust.price}</div>
                   </div>
                 )}
               </div>

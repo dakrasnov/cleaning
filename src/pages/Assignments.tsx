@@ -26,13 +26,14 @@ export default function AssignmentsPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null)
   const [selShift, setSelShift] = useState('')
+  const [lockedShiftId, setLockedShiftId] = useState('')
   const [slot1, setSlot1] = useState('')
   const [slot2, setSlot2] = useState('')
   const [slot3, setSlot3] = useState('')
   const [editStatus, setEditStatus] = useState<AssignmentStatus>('assigned')
 
   useEffect(() => {
-    if (searchParams.get('new') === '1') openCreate()
+    if (searchParams.get('new') === '1') openCreate(searchParams.get('shift_id') ?? '')
   }, [])
 
   const activeEmployees = employees.filter(e => e.status === 'active')
@@ -54,8 +55,9 @@ export default function AssignmentsPage() {
       paid: false,
     }))
 
-  const openCreate = () => {
-    setSelShift('')
+  const openCreate = (prefilledShiftId = '') => {
+    setSelShift(prefilledShiftId)
+    setLockedShiftId(prefilledShiftId)
     setSlot1('')
     setSlot2('')
     setSlot3('')
@@ -77,6 +79,7 @@ export default function AssignmentsPage() {
     setModalMode(null)
     setEditingAssignment(null)
     setSelShift('')
+    setLockedShiftId('')
     setSlot1('')
     setSlot2('')
     setSlot3('')
@@ -227,15 +230,29 @@ export default function AssignmentsPage() {
 
       {modalMode && (
         <Modal title={modalMode === 'edit' ? 'Edit Assignment' : 'New Assignment'} onClose={closeModal}>
-          <Field label={modalMode === 'edit' ? 'Shift' : 'Select Shift (Open Only)'}>
-            <Select value={selShift} onChange={e => setSelShift(e.target.value)}>
-              <option value="">-- Choose a shift --</option>
-              {shiftOptions.map(s => {
-                const c = customers.find(cu => cu.id === s.customer_id)
-                return <option key={s.id} value={s.id}>{c?.name} — {fmtDate(s.date)} {fmtTime(s.time_start)}</option>
-              })}
-            </Select>
-          </Field>
+          {lockedShiftId ? (
+            <Field label="Shift">
+              {(() => {
+                const s = shifts.find(sh => sh.id === lockedShiftId)
+                const c = customers.find(cu => cu.id === s?.customer_id)
+                return (
+                  <div className="input-base text-sm" style={{ color: NAVY, opacity: 0.75 }}>
+                    {c?.name ?? '—'} — {fmtDate(s?.date ?? '')} {fmtTime(s?.time_start ?? '')}
+                  </div>
+                )
+              })()}
+            </Field>
+          ) : (
+            <Field label={modalMode === 'edit' ? 'Shift' : 'Select Shift (Open Only)'}>
+              <Select value={selShift} onChange={e => setSelShift(e.target.value)}>
+                <option value="">-- Choose a shift --</option>
+                {shiftOptions.map(s => {
+                  const c = customers.find(cu => cu.id === s.customer_id)
+                  return <option key={s.id} value={s.id}>{c?.name} — {fmtDate(s.date)} {fmtTime(s.time_start)}</option>
+                })}
+              </Select>
+            </Field>
+          )}
 
           <Field label="Employee 1 *">
             <Select value={slot1} onChange={e => setSlot1(e.target.value)}>

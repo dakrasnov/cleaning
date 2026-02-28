@@ -10,9 +10,9 @@ const statusColors: Record<string, { bg: string; text: string }> = {
   inactive:  { bg: '#FFE4E4', text: '#C0392B' },
   on_leave:  { bg: '#FFF3CD', text: '#9A6700' },
   open:      { bg: '#FFF3CD', text: '#9A6700' },
+  assigned:  { bg: '#DBEAFE', text: '#1D4ED8' },
   confirmed: { bg: '#D1FAF3', text: '#00836D' },
   cancelled: { bg: '#FFE4E4', text: '#C0392B' },
-  assigned:  { bg: '#FFF3CD', text: '#9A6700' },
   completed: { bg: '#DBEAFE', text: '#1E40AF' },
 }
 

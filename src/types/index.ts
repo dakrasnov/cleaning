@@ -1,12 +1,13 @@
 export type CustomerStatus = 'active' | 'inactive'
 export type EmployeeStatus = 'active' | 'inactive' | 'on_leave'
-export type ShiftStatus = 'open' | 'confirmed' | 'cancelled' | 'completed'
+export type ShiftStatus = 'open' | 'assigned' | 'confirmed' | 'cancelled' | 'completed'
 export type AssignmentStatus = 'assigned' | 'confirmed' | 'completed'
 
 export interface PaymentInfo {
   employee_id: string
   amount: number
   paid: boolean
+  confirmed?: boolean
 }
 
 export interface Customer {
@@ -44,6 +45,7 @@ export interface Shift {
   time_end: string
   comment: string
   status: ShiftStatus
+  coef?: number
   created_at: string
 }
 

@@ -97,6 +97,13 @@ export async function sendTelegramWithConfirmation(chatId: string, text: string,
   }
 }
 
+export function buildCancellationMessage(employeeName: string, date: string, timeStart: string, customerName: string): string {
+  const [y, m, d] = date.split('-')
+  const formattedDate = `${d}.${m}.${y}`
+  const time = timeStart.slice(0, 5)
+  return `${employeeName}, Ваша смена ${formattedDate}, ${time} у клиента ${customerName} отменена.`
+}
+
 export async function testBotConnection(token: string): Promise<{ ok: boolean; username?: string }> {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/getMe`)

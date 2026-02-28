@@ -6,6 +6,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
+import { useAssignmentsStore } from '@/store/assignments'
 import { Badge, Btn, DateInput, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
 import type { Shift } from '@/types'
@@ -48,6 +49,7 @@ const schema = z.object({
   time_end: z.string().min(1, 'End time is required'),
   comment: z.string(),
   status: z.enum(['open', 'confirmed', 'cancelled', 'completed']),
+  coef: z.number().int().min(1).max(3).default(1),
 })
 type FormData = z.infer<typeof schema>
 
@@ -61,6 +63,7 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
   const [duration, setDuration] = useState(() =>
     initial?.time_start && initial?.time_end ? diffMins(initial.time_start, initial.time_end) : 120
   )
+  const [coefValue, setCoefValue] = useState<number>(initial?.coef ?? 1)
   const defaultCustomerId = initial?.customer_id ?? (customers[0]?.id ?? '')
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -72,6 +75,7 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
       time_end: (initial?.time_end ?? '11:00').slice(0, 5),
       comment: initial?.comment ?? '',
       status: (initial?.status ?? 'open') as FormData['status'],
+      coef: initial?.coef ?? 1,
     },
   })
   const timeStart = watch('time_start')
@@ -142,10 +146,38 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
       <div className="text-sm text-gray-500 -mt-2 mb-4">
         Ends at: <span className="font-semibold" style={{ color: MINT }}>{endTime}</span>
       </div>
-      <Field label="Date *" error={errors.date?.message}><Input type="date" {...register('date')} /></Field>
+      <Field label="Coefficient">
+        <div className="flex gap-2">
+          {[1, 2, 3].map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => { setCoefValue(c); setValue('coef', c) }}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                borderRadius: '12px',
+                fontWeight: 700,
+                fontSize: '15px',
+                border: 'none',
+                cursor: 'pointer',
+                background: coefValue === c ? NAVY : '#F0F2F5',
+                color: coefValue === c ? '#fff' : '#718096',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              {c}×
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Date *" error={errors.date?.message}>
+        <DateInput value={watch('date')} onChange={v => setValue('date', v, { shouldValidate: true })} />
+      </Field>
       <Field label="Status">
         <Select {...register('status')}>
           <option value="open">Open</option>
+          <option value="assigned">Assigned</option>
           <option value="confirmed">Confirmed</option>
           <option value="cancelled">Cancelled</option>
           <option value="completed">Completed</option>
@@ -170,6 +202,7 @@ export default function ShiftsPage() {
   const [searchParams] = useSearchParams()
   const { shifts, loading, create, fetch } = useShiftsStore()
   const customers = useCustomersStore(s => s.customers)
+  const assignments = useAssignmentsStore(s => s.assignments)
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState(todayStr)
@@ -208,7 +241,7 @@ export default function ShiftsPage() {
     }
   }
 
-  const statusColors: Record<string, string> = { open: '#ECC94B', confirmed: MINT, completed: '#10B981', cancelled: '#E53E3E' }
+  const statusColors: Record<string, string> = { open: '#ECC94B', assigned: '#3B82F6', confirmed: MINT, completed: '#10B981', cancelled: '#E53E3E' }
 
   return (
     <div>
@@ -220,8 +253,8 @@ export default function ShiftsPage() {
           { value: 'cancelled', label: 'Cancelled' },
         ]} />
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <div><label className="text-xs font-semibold text-gray-400">FROM</label><DateInput value={dateFrom} onChange={setDateFrom} /></div>
-        <div><label className="text-xs font-semibold text-gray-400">TO</label><DateInput value={dateTo} onChange={setDateTo} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">FROM</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
+        <div><label className="text-xs font-semibold text-gray-400">TO</label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
       </div>
 
       {loading && <SkeletonList count={5} />}
@@ -235,6 +268,7 @@ export default function ShiftsPage() {
           </div>
           {dayShifts.map(s => {
             const cust = customers.find(c => c.id === s.customer_id)
+            const asgn = assignments.find(a => a.shift_id === s.id)
             return (
               <div key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}
                 className="bg-white rounded-2xl p-4 mb-2.5 cursor-pointer hover:-translate-y-0.5 transition-transform shadow-sm"
@@ -244,7 +278,19 @@ export default function ShiftsPage() {
                     <div className="font-bold" style={{ color: NAVY }}>{cust?.name}</div>
                     <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
                   </div>
-                  <Badge status={s.status} />
+                  <div className="flex flex-col items-end gap-1.5">
+                    <Badge status={s.status} />
+                    {asgn && asgn.employee_ids.length > 0 && (
+                      <div className="flex gap-1">
+                        {asgn.employee_ids.map(eid => {
+                          const confirmed = asgn.payment_info?.find(p => p.employee_id === eid)?.confirmed
+                          return (
+                            <div key={eid} style={{ width: 10, height: 10, borderRadius: '50%', background: confirmed ? '#10B981' : '#CBD5E0' }} />
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )

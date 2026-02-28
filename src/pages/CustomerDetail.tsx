@@ -8,6 +8,7 @@ import { useCustomersStore } from '@/store/customers'
 import { useShiftsStore } from '@/store/shifts'
 import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+import type { Customer } from '@/types'
 
 const NAVY = '#0F2041'
 const MINT = '#00C9A7'
@@ -24,6 +25,34 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
+// Extracted outside parent to prevent remount on parent re-render
+const CustomerEditForm = ({ customer, onSave, onClose }: {
+  customer: Customer
+  onSave: (data: FormData) => void
+  onClose: () => void
+}) => {
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { ...customer, overhead: customer.overhead ?? 0 },
+  })
+  return (
+    <form onSubmit={handleSubmit(onSave)}>
+      <Field label="Name *" error={errors.name?.message}><Input {...register('name')} /></Field>
+      <Field label="Phone *" error={errors.phone?.message}><Input {...register('phone')} /></Field>
+      <Field label="Status"><Select {...register('status')}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>
+      <Field label="Address *" error={errors.address?.message}><Input {...register('address')} /></Field>
+      <Field label="Google Maps Link"><Input {...register('google_maps_link')} /></Field>
+      <Field label="Price per hour"><Input type="number" {...register('price')} /></Field>
+      <Field label="Overhead"><Input type="number" {...register('overhead')} /></Field>
+      <Field label="Comment"><Textarea {...register('comment')} /></Field>
+      <div className="flex gap-3 mt-2">
+        <Btn variant="secondary" full onClick={onClose}>Cancel</Btn>
+        <Btn full>Save Changes</Btn>
+      </div>
+    </form>
+  )
+}
+
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -36,35 +65,25 @@ export default function CustomerDetailPage() {
 
   if (!customer) return <div className="p-8 text-center text-gray-400">Customer not found</div>
 
-  const allShifts = shifts.filter(s => s.customer_id === id).sort((a, b) => b.date.localeCompare(a.date))
-  const upcoming  = allShifts.filter(s => s.date >= todayStr() && s.status !== 'cancelled').slice(0, 2)
+  const allShifts = shifts.filter(s => s.customer_id === id)
 
-  const EditForm = () => {
-    const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-      resolver: zodResolver(schema), defaultValues: { ...customer, overhead: customer.overhead ?? 0 },
-    })
-    const onSubmit = async (data: FormData) => {
-      await update(customer.id, data)
-      toast.success('Customer updated')
-      setShowEdit(false)
-    }
-    return (
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <Field label="Name *" error={errors.name?.message}><Input {...register('name')} /></Field>
-        <Field label="Phone *" error={errors.phone?.message}><Input {...register('phone')} /></Field>
-        <Field label="Status"><Select {...register('status')}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>
-        <Field label="Address *" error={errors.address?.message}><Input {...register('address')} /></Field>
-        <Field label="Google Maps Link"><Input {...register('google_maps_link')} /></Field>
-        <Field label="Price per hour ($)"><Input type="number" {...register('price')} /></Field>
-        <Field label="Overhead ($)"><Input type="number" {...register('overhead')} /></Field>
-        <Field label="Comment"><Textarea {...register('comment')} /></Field>
-        <div className="flex gap-3 mt-2">
-          <Btn variant="secondary" full onClick={() => setShowEdit(false)}>Cancel</Btn>
-          <Btn full>Save Changes</Btn>
-        </div>
-      </form>
-    )
+  const currentTimeStr = new Date().toTimeString().slice(0, 5)
+  const todayDate = todayStr()
+
+  const isUpcoming = (s: typeof allShifts[0]) => {
+    if (s.status === 'cancelled') return false
+    if (s.date > todayDate) return true
+    if (s.date === todayDate) return s.time_start >= currentTimeStr
+    return false
   }
+
+  const upcoming = allShifts
+    .filter(isUpcoming)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time_start.localeCompare(b.time_start))
+
+  const history = allShifts
+    .filter(s => !isUpcoming(s))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.time_start.localeCompare(a.time_start))
 
   return (
     <div>
@@ -93,11 +112,11 @@ export default function CustomerDetailPage() {
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Hourly Rate</div>
-            <span className="font-extrabold text-xl" style={{ color: MINT }}>${customer.price}/hr</span>
+            <span className="font-extrabold text-xl" style={{ color: MINT }}>{customer.price}/hr</span>
           </div>
           <div>
             <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Overhead</div>
-            <span className="font-semibold">${customer.overhead}</span>
+            <span className="font-semibold">{customer.overhead}</span>
           </div>
           {customer.comment && <div><div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Note</div><p className="text-sm text-gray-700">{customer.comment}</p></div>}
         </div>
@@ -106,7 +125,7 @@ export default function CustomerDetailPage() {
       {upcoming.length > 0 && <>
         <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Upcoming Shifts</h3>
         {upcoming.map(s => (
-          <Card key={s.id} style={{ borderLeft: `4px solid ${MINT}` }}>
+          <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)} style={{ borderLeft: `4px solid ${MINT}` }}>
             <div className="flex justify-between">
               <div>
                 <div className="font-semibold">{fmtDate(s.date)}</div>
@@ -119,9 +138,9 @@ export default function CustomerDetailPage() {
       </>}
 
       <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Shift History</h3>
-      {allShifts.length === 0
-        ? <p className="text-sm text-gray-400">No shifts yet.</p>
-        : allShifts.map(s => (
+      {history.length === 0
+        ? <p className="text-sm text-gray-400">No past shifts yet.</p>
+        : history.map(s => (
           <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
             <div className="flex justify-between">
               <div>
@@ -133,7 +152,17 @@ export default function CustomerDetailPage() {
           </Card>
         ))}
 
-      {showEdit && <Modal title="Edit Customer" onClose={() => setShowEdit(false)}><EditForm /></Modal>}
+      {showEdit && <Modal title="Edit Customer" onClose={() => setShowEdit(false)}>
+        <CustomerEditForm
+          customer={customer}
+          onSave={async (data) => {
+            const ok = await update(customer.id, data)
+            if (ok) { toast.success('Customer updated'); setShowEdit(false) }
+            else toast.error('Failed to save')
+          }}
+          onClose={() => setShowEdit(false)}
+        />
+      </Modal>}
       {showDelete && <ConfirmSheet msg="Delete this customer? This cannot be undone."
         onConfirm={async () => { await remove(customer.id); toast.success('Customer deleted'); navigate('/customers') }}
         onCancel={() => setShowDelete(false)} />}
