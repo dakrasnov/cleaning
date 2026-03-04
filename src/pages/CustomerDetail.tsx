@@ -6,8 +6,9 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useCustomersStore } from '@/store/customers'
 import { useShiftsStore } from '@/store/shifts'
+import { useCustomerPaymentsStore } from '@/store/customerPayments'
 import { Badge, BackBtn, Btn, Card, ConfirmSheet, Field, Input, Modal, Select, Textarea } from '@/components/ui'
-import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+import { fmtDate, fmtTime, todayStr, fmtAmount } from '@/lib/utils'
 import type { Customer } from '@/types'
 
 const NAVY = '#0F2041'
@@ -58,6 +59,7 @@ export default function CustomerDetailPage() {
   const navigate = useNavigate()
   const { customers, update, remove } = useCustomersStore()
   const shifts = useShiftsStore(s => s.shifts)
+  const customerPayments = useCustomerPaymentsStore(s => s.payments)
 
   const customer = customers.find(c => c.id === id)
   const [showEdit, setShowEdit] = useState(false)
@@ -124,33 +126,45 @@ export default function CustomerDetailPage() {
 
       {upcoming.length > 0 && <>
         <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Upcoming Shifts</h3>
-        {upcoming.map(s => (
-          <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)} style={{ borderLeft: `4px solid ${MINT}` }}>
-            <div className="flex justify-between">
-              <div>
-                <div className="font-semibold">{fmtDate(s.date)}</div>
-                <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+        {upcoming.map(s => {
+          const payment = customerPayments.find(p => p.shift_id === s.id)
+          return (
+            <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)} style={{ borderLeft: `4px solid ${MINT}` }}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="font-semibold">{fmtDate(s.date)}</div>
+                  <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge status={s.status} />
+                  {payment && <span className="text-sm font-bold" style={{ color: MINT }}>{fmtAmount(payment.amount)}</span>}
+                </div>
               </div>
-              <Badge status={s.status} />
-            </div>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
       </>}
 
       <h3 className="font-heading font-bold mb-3 mt-5" style={{ color: NAVY }}>Shift History</h3>
       {history.length === 0
         ? <p className="text-sm text-gray-400">No past shifts yet.</p>
-        : history.map(s => (
-          <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
-            <div className="flex justify-between">
-              <div>
-                <div className="font-semibold">{fmtDate(s.date)}</div>
-                <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+        : history.map(s => {
+          const payment = customerPayments.find(p => p.shift_id === s.id)
+          return (
+            <Card key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="font-semibold">{fmtDate(s.date)}</div>
+                  <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge status={s.status} />
+                  {payment && <span className="text-sm font-bold" style={{ color: MINT }}>{fmtAmount(payment.amount)}</span>}
+                </div>
               </div>
-              <Badge status={s.status} />
-            </div>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
 
       {showEdit && <Modal title="Edit Customer" onClose={() => setShowEdit(false)}>
         <CustomerEditForm

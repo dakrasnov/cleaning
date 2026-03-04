@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import logoUrl from '@/assets/logo.png'
 import { useAuthStore } from '@/store/auth'
 
 const NAVY = '#0F2041'
@@ -23,9 +24,9 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', background: NAVY, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <div style={{ fontSize: 52, marginBottom: 12 }}>🧹</div>
+        <img src={logoUrl} alt="Achla Bayit" style={{ width: 80, height: 80, marginBottom: 12 }} />
         <h1 style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: '#fff', fontSize: 32, fontWeight: 800, margin: 0 }}>
-          CleanShift
+          Achla Bayit
         </h1>
         <p style={{ color: 'rgba(255,255,255,0.5)', marginTop: 6, fontSize: 15 }}>
           Operations management

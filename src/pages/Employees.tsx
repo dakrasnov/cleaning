@@ -64,7 +64,7 @@ export default function EmployeesPage() {
   const accruals = useAccrualsStore(s => s.accruals)
   const payments = usePaymentsStore(s => s.payments)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('active')
   const [showForm, setShowForm] = useState(false)
 
   const filtered = employees.filter(e =>

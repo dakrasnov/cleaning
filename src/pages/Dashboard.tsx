@@ -34,15 +34,8 @@ export default function DashboardPage() {
     { label: 'Active Clients',  value: customers.filter(c => c.status === 'active').length,  icon: '🏠', color: '#9B59B6' },
   ]
 
-  const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-sm text-gray-500">{dayOfWeek}</p>
-        <h2 className="font-heading text-3xl font-bold" style={{ color: NAVY }}>Good morning! 👋</h2>
-      </div>
-
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {stats.map(s => (

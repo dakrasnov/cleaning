@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,8 +7,8 @@ import toast from 'react-hot-toast'
 import { useShiftsStore } from '@/store/shifts'
 import { useCustomersStore } from '@/store/customers'
 import { useAssignmentsStore } from '@/store/assignments'
-import { Badge, Btn, DateInput, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
-import { fmtDate, fmtTime, todayStr } from '@/lib/utils'
+import { Badge, Btn, Empty, Field, FilterPills, Input, Modal, PageHeader, Select, SkeletonList, Textarea } from '@/components/ui'
+import { fmtDate, fmtDateShort, todayStr, durHHMM } from '@/lib/utils'
 import type { Shift } from '@/types'
 
 const NAVY = '#0F2041'
@@ -50,6 +50,8 @@ const schema = z.object({
   comment: z.string(),
   status: z.enum(['open', 'confirmed', 'cancelled', 'completed']),
   coef: z.number().int().min(1).max(3).default(1),
+  customer_rate: z.coerce.number().min(0).default(0),
+  customer_amount: z.coerce.number().min(0).default(0),
 })
 type FormData = z.infer<typeof schema>
 
@@ -76,11 +78,29 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
       comment: initial?.comment ?? '',
       status: (initial?.status ?? 'open') as FormData['status'],
       coef: initial?.coef ?? 1,
+      customer_rate: initial?.customer_rate ?? 0,
+      customer_amount: initial?.customer_amount ?? 0,
     },
   })
   const timeStart = watch('time_start')
   const endTime = watch('time_end')
   const customerId = watch('customer_id')
+
+  // Customer rate / amount cross-calculation
+  const selectedCustomer = customers.find(c => c.id === customerId)
+  const [custRate, setCustRate] = useState<number>(() => {
+    if (initial?.customer_rate != null && initial.customer_rate > 0) return initial.customer_rate
+    const cust = customers.find(c => c.id === defaultCustomerId)
+    return cust?.price ?? 0
+  })
+  const [custAmount, setCustAmount] = useState<number>(() => {
+    if (initial?.customer_amount != null && initial.customer_amount > 0) return initial.customer_amount
+    const cust = customers.find(c => c.id === defaultCustomerId)
+    const rate = cust?.price ?? 0
+    const dur = (initial?.time_start && initial?.time_end ? diffMins(initial.time_start, initial.time_end) : 120) / 60
+    return Math.round(rate * dur + (cust?.overhead ?? 0))
+  })
+  const prevCustIdRef = useRef(customerId)
 
   // Customer search state
   const [custSearch, setCustSearch] = useState(() =>
@@ -94,6 +114,51 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
   useEffect(() => {
     setValue('time_end', addMins(timeStart, duration))
   }, [timeStart, duration])
+
+  // When customer changes, re-seed rate/amount from new customer
+  useEffect(() => {
+    if (customerId !== prevCustIdRef.current) {
+      prevCustIdRef.current = customerId
+      if (selectedCustomer) {
+        const rate = selectedCustomer.price
+        const amt = Math.round(rate * coefValue * (duration / 60) + selectedCustomer.overhead)
+        setCustRate(rate); setValue('customer_rate', rate)
+        setCustAmount(amt); setValue('customer_amount', amt)
+      }
+    }
+  }, [customerId])
+
+  // When duration changes, recalculate amount from current rate
+  useEffect(() => {
+    if (selectedCustomer && custRate > 0) {
+      const amt = Math.round(custRate * coefValue * (duration / 60) + selectedCustomer.overhead)
+      setCustAmount(amt); setValue('customer_amount', amt)
+    }
+  }, [duration])
+
+  const handleRateChange = (rate: number) => {
+    setCustRate(rate); setValue('customer_rate', rate)
+    if (selectedCustomer) {
+      const amt = Math.round(rate * coefValue * (duration / 60) + selectedCustomer.overhead)
+      setCustAmount(amt); setValue('customer_amount', amt)
+    }
+  }
+
+  const handleAmountChange = (amount: number) => {
+    setCustAmount(amount); setValue('customer_amount', amount)
+    if (selectedCustomer && duration > 0) {
+      const rate = Math.round((amount - selectedCustomer.overhead) / (coefValue * (duration / 60)))
+      setCustRate(rate); setValue('customer_rate', rate)
+    }
+  }
+
+  const handleCoefChange = (c: number) => {
+    setCoefValue(c); setValue('coef', c)
+    if (selectedCustomer) {
+      const amt = Math.round(custRate * c * (duration / 60) + selectedCustomer.overhead)
+      setCustAmount(amt); setValue('customer_amount', amt)
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit(onSave)}>
@@ -131,6 +196,9 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
         </div>
         <input type="hidden" {...register('customer_id')} />
       </Field>
+      <Field label="Date *" error={errors.date?.message}>
+        <Input type="date" {...register('date')} />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Start *" error={errors.time_start?.message}>
           <Select {...register('time_start')}>
@@ -146,13 +214,33 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
       <div className="text-sm text-gray-500 -mt-2 mb-4">
         Ends at: <span className="font-semibold" style={{ color: MINT }}>{endTime}</span>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Customer Rate ($/hr)">
+          <input
+            className="input-base"
+            type="number"
+            min="0"
+            value={custRate}
+            onChange={e => handleRateChange(Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Customer Amount">
+          <input
+            className="input-base"
+            type="number"
+            min="0"
+            value={custAmount}
+            onChange={e => handleAmountChange(Number(e.target.value))}
+          />
+        </Field>
+      </div>
       <Field label="Coefficient">
         <div className="flex gap-2">
           {[1, 2, 3].map(c => (
             <button
               key={c}
               type="button"
-              onClick={() => { setCoefValue(c); setValue('coef', c) }}
+              onClick={() => handleCoefChange(c)}
               style={{
                 flex: 1,
                 padding: '10px 0',
@@ -170,9 +258,6 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
             </button>
           ))}
         </div>
-      </Field>
-      <Field label="Date *" error={errors.date?.message}>
-        <DateInput value={watch('date')} onChange={v => setValue('date', v, { shouldValidate: true })} />
       </Field>
       <Field label="Status">
         <Select {...register('status')}>
@@ -276,7 +361,11 @@ export default function ShiftsPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="font-bold" style={{ color: NAVY }}>{cust?.name}</div>
-                    <div className="text-sm text-gray-500">{fmtTime(s.time_start)} – {fmtTime(s.time_end)}</div>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <span className="font-bold text-base" style={{ color: NAVY }}>{fmtDateShort(s.date)}</span>
+                      <span className="text-sm text-gray-500">{s.time_start.slice(0, 5)}</span>
+                      <span className="text-sm text-gray-400">{durHHMM(s.time_start, s.time_end)}</span>
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <Badge status={s.status} />

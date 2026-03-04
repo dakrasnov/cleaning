@@ -4,6 +4,8 @@ import type { Shift } from '@/types'
 import { useAssignmentsStore } from '@/store/assignments'
 import { useEmployeesStore } from '@/store/employees'
 import { useAccrualsStore } from '@/store/accruals'
+import { useCustomerPaymentsStore } from '@/store/customerPayments'
+import { useCustomersStore } from '@/store/customers'
 
 interface ShiftsState {
   shifts: Shift[]
@@ -75,6 +77,21 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
     // Reversal: moving away from 'completed' deletes accruals for that shift
     if (prevShift?.status === 'completed' && data.status && data.status !== 'completed') {
       await useAccrualsStore.getState().deleteByShift(id)
+      await useCustomerPaymentsStore.getState().deleteByShift(id)
+    }
+
+    // Customer payment trigger: completing a shift records the customer payment
+    if (data.status === 'completed' && prevShift?.status !== 'completed') {
+      const shift = get().shifts.find(s => s.id === id)
+      if (shift) {
+        const { customers } = useCustomersStore.getState()
+        const customer = customers.find(c => c.id === shift.customer_id)
+        const durationHours = (toMinutes(shift.time_end) - toMinutes(shift.time_start)) / 60
+        const amount = shift.customer_amount != null
+          ? shift.customer_amount
+          : (customer ? Math.round(customer.price * durationHours * (shift.coef ?? 1) + customer.overhead) : 0)
+        await useCustomerPaymentsStore.getState().createForShift(id, shift.customer_id, amount)
+      }
     }
   },
 

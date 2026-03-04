@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import logoUrl from '@/assets/logo.png'
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
 import { useCustomersStore } from '@/store/customers'
@@ -7,6 +8,7 @@ import { useShiftsStore } from '@/store/shifts'
 import { useAssignmentsStore } from '@/store/assignments'
 import { useAccrualsStore } from '@/store/accruals'
 import { usePaymentsStore } from '@/store/payments'
+import { useCustomerPaymentsStore } from '@/store/customerPayments'
 
 import LoginPage from '@/pages/Login'
 import EmployeeDashboard from '@/pages/EmployeeDashboard'
@@ -32,7 +34,7 @@ const ADMIN_TABS = [
 
 const LoadingScreen = () => (
   <div style={{ minHeight: '100vh', background: '#0F2041', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-    <div style={{ fontSize: 48 }}>🧹</div>
+    <img src={logoUrl} alt="logo" style={{ height: 80 }} />
     <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#00C9A7', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
   </div>
@@ -45,8 +47,9 @@ const AdminLayout = () => {
   const fetchEmployees   = useEmployeesStore(s => s.fetch)
   const fetchShifts      = useShiftsStore(s => s.fetch)
   const fetchAssignments = useAssignmentsStore(s => s.fetch)
-  const fetchAccruals    = useAccrualsStore(s => s.fetch)
-  const fetchPayments    = usePaymentsStore(s => s.fetch)
+  const fetchAccruals         = useAccrualsStore(s => s.fetch)
+  const fetchPayments         = usePaymentsStore(s => s.fetch)
+  const fetchCustomerPayments = useCustomerPaymentsStore(s => s.fetch)
 
   useEffect(() => {
     const fetchAll = () => {
@@ -56,6 +59,7 @@ const AdminLayout = () => {
       fetchAssignments()
       fetchAccruals()
       fetchPayments()
+      fetchCustomerPayments()
     }
 
     fetchAll()
@@ -74,7 +78,7 @@ const AdminLayout = () => {
     <div style={{ minHeight: '100vh', background: '#F5F7FA', maxWidth: 480, margin: '0 auto', position: 'relative' }}>
       <header style={{ background: '#0F2041', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 22 }}>🧹</span>
+          <img src={logoUrl} alt="logo" style={{ height: 36 }} />
           <span style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: '#fff', fontSize: 20, fontWeight: 800 }}>Achla Bayit</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

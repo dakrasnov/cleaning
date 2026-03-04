@@ -48,6 +48,16 @@ export interface Shift {
   comment: string
   status: ShiftStatus
   coef?: number
+  customer_rate?: number
+  customer_amount?: number
+  created_at: string
+}
+
+export interface CustomerPayment {
+  id: string
+  customer_id: string
+  shift_id: string
+  amount: number
   created_at: string
 }
 
