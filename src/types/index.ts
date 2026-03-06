@@ -48,6 +48,7 @@ export interface Shift {
   comment: string
   status: ShiftStatus
   coef?: number
+  overhead?: number
   customer_rate?: number
   customer_amount?: number
   created_at: string

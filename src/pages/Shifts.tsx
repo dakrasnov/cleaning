@@ -48,8 +48,9 @@ const schema = z.object({
   time_start: z.string().min(1, 'Start time is required'),
   time_end: z.string().min(1, 'End time is required'),
   comment: z.string(),
-  status: z.enum(['open', 'confirmed', 'cancelled', 'completed']),
+  status: z.enum(['open', 'assigned', 'confirmed', 'cancelled', 'completed']),
   coef: z.number().int().min(1).max(3).default(1),
+  overhead: z.coerce.number().min(0).default(0),
   customer_rate: z.coerce.number().min(0).default(0),
   customer_amount: z.coerce.number().min(0).default(0),
 })
@@ -78,6 +79,7 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
       comment: initial?.comment ?? '',
       status: (initial?.status ?? 'open') as FormData['status'],
       coef: initial?.coef ?? 1,
+      overhead: initial?.overhead ?? customers.find(c => c.id === defaultCustomerId)?.overhead ?? 0,
       customer_rate: initial?.customer_rate ?? 0,
       customer_amount: initial?.customer_amount ?? 0,
     },
@@ -101,6 +103,11 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
     return Math.round(rate * dur + (cust?.overhead ?? 0))
   })
   const prevCustIdRef = useRef(customerId)
+  const [shiftOverhead, setShiftOverhead] = useState<number>(() => {
+    if (initial?.overhead != null) return initial.overhead
+    const cust = customers.find(c => c.id === defaultCustomerId)
+    return cust?.overhead ?? 0
+  })
 
   // Customer search state
   const [custSearch, setCustSearch] = useState(() =>
@@ -111,18 +118,28 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
     ? customers.filter(c => c.name.toLowerCase().includes(custSearch.toLowerCase()))
     : customers
 
+  // Sync computed initial values into form so they're always submitted correctly
+  useEffect(() => {
+    setValue('customer_rate', custRate)
+    setValue('customer_amount', custAmount)
+    setValue('overhead', shiftOverhead)
+    setValue('coef', coefValue)
+  }, [])
+
   useEffect(() => {
     setValue('time_end', addMins(timeStart, duration))
   }, [timeStart, duration])
 
-  // When customer changes, re-seed rate/amount from new customer
+  // When customer changes, re-seed rate/overhead/amount from new customer
   useEffect(() => {
     if (customerId !== prevCustIdRef.current) {
       prevCustIdRef.current = customerId
       if (selectedCustomer) {
         const rate = selectedCustomer.price
-        const amt = Math.round(rate * coefValue * (duration / 60) + selectedCustomer.overhead)
+        const overhead = selectedCustomer.overhead
+        const amt = Math.round(rate * coefValue * (duration / 60) + overhead)
         setCustRate(rate); setValue('customer_rate', rate)
+        setShiftOverhead(overhead); setValue('overhead', overhead)
         setCustAmount(amt); setValue('customer_amount', amt)
       }
     }
@@ -130,34 +147,36 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
 
   // When duration changes, recalculate amount from current rate
   useEffect(() => {
-    if (selectedCustomer && custRate > 0) {
-      const amt = Math.round(custRate * coefValue * (duration / 60) + selectedCustomer.overhead)
+    if (custRate > 0) {
+      const amt = Math.round(custRate * coefValue * (duration / 60) + shiftOverhead)
       setCustAmount(amt); setValue('customer_amount', amt)
     }
   }, [duration])
 
   const handleRateChange = (rate: number) => {
     setCustRate(rate); setValue('customer_rate', rate)
-    if (selectedCustomer) {
-      const amt = Math.round(rate * coefValue * (duration / 60) + selectedCustomer.overhead)
-      setCustAmount(amt); setValue('customer_amount', amt)
-    }
+    const amt = Math.round(rate * coefValue * (duration / 60) + shiftOverhead)
+    setCustAmount(amt); setValue('customer_amount', amt)
+  }
+
+  const handleOverheadChange = (overhead: number) => {
+    setShiftOverhead(overhead); setValue('overhead', overhead)
+    const amt = Math.round(custRate * coefValue * (duration / 60) + overhead)
+    setCustAmount(amt); setValue('customer_amount', amt)
   }
 
   const handleAmountChange = (amount: number) => {
     setCustAmount(amount); setValue('customer_amount', amount)
-    if (selectedCustomer && duration > 0) {
-      const rate = Math.round((amount - selectedCustomer.overhead) / (coefValue * (duration / 60)))
+    if (duration > 0) {
+      const rate = Math.round((amount - shiftOverhead) / (coefValue * (duration / 60)))
       setCustRate(rate); setValue('customer_rate', rate)
     }
   }
 
   const handleCoefChange = (c: number) => {
     setCoefValue(c); setValue('coef', c)
-    if (selectedCustomer) {
-      const amt = Math.round(custRate * c * (duration / 60) + selectedCustomer.overhead)
-      setCustAmount(amt); setValue('customer_amount', amt)
-    }
+    const amt = Math.round(custRate * c * (duration / 60) + shiftOverhead)
+    setCustAmount(amt); setValue('customer_amount', amt)
   }
 
   return (
@@ -234,6 +253,15 @@ export const ShiftForm = ({ initial, onSave, onClose, onDelete }: {
           />
         </Field>
       </div>
+      <Field label="Overhead">
+        <input
+          className="input-base"
+          type="number"
+          min="0"
+          value={shiftOverhead}
+          onChange={e => handleOverheadChange(Number(e.target.value))}
+        />
+      </Field>
       <Field label="Coefficient">
         <div className="flex gap-2">
           {[1, 2, 3].map(c => (
@@ -314,6 +342,15 @@ export default function ShiftsPage() {
     return acc
   }, {} as Record<string, Shift[]>)
 
+  const totalProfit = filtered
+    .filter(s => s.status === 'completed' && s.customer_amount != null)
+    .reduce((sum, s) => {
+      const asgn = assignments.find(a => a.shift_id === s.id)
+      const empCost = asgn?.payment_info?.reduce((t, p) => t + (p.amount ?? 0), 0) ?? 0
+      return sum + ((s.customer_amount ?? 0) - empCost)
+    }, 0)
+  const hasCompletedInView = filtered.some(s => s.status === 'completed' && s.customer_amount != null)
+
   const handleCreate = async (data: FormData) => {
     const result = await create(data as Omit<Shift, 'id' | 'created_at'>)
     if (result) {
@@ -341,6 +378,12 @@ export default function ShiftsPage() {
         <div><label className="text-xs font-semibold text-gray-400">FROM</label><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
         <div><label className="text-xs font-semibold text-gray-400">TO</label><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
       </div>
+      {hasCompletedInView && (
+        <div className="flex justify-between items-center bg-white rounded-2xl px-4 py-2.5 mb-3 shadow-sm">
+          <span className="text-sm font-semibold text-gray-500">Profit (completed)</span>
+          <span className="font-bold text-lg" style={{ color: MINT }}>{totalProfit}</span>
+        </div>
+      )}
 
       {loading && <SkeletonList count={5} />}
       {!loading && Object.keys(grouped).length === 0 && <Empty icon="📅" title="No Shifts" sub="Create your first shift." cta="+ New Shift" onCta={() => setShowForm(true)} />}
@@ -354,32 +397,39 @@ export default function ShiftsPage() {
           {dayShifts.map(s => {
             const cust = customers.find(c => c.id === s.customer_id)
             const asgn = assignments.find(a => a.shift_id === s.id)
+            const empCost = s.status === 'completed' && asgn
+              ? (asgn.payment_info?.reduce((sum, p) => sum + (p.amount ?? 0), 0) ?? 0)
+              : 0
+            const profit = (s.customer_amount ?? 0) - empCost
             return (
               <div key={s.id} onClick={() => navigate(`/shifts/${s.id}`)}
                 className="bg-white rounded-2xl p-4 mb-2.5 cursor-pointer hover:-translate-y-0.5 transition-transform shadow-sm"
                 style={{ borderLeft: `4px solid ${statusColors[s.status] ?? '#ccc'}` }}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-bold" style={{ color: NAVY }}>{cust?.name}</div>
-                    <div className="flex items-baseline gap-2 mt-0.5">
-                      <span className="font-bold text-base" style={{ color: NAVY }}>{fmtDateShort(s.date)}</span>
-                      <span className="text-sm text-gray-500">{s.time_start.slice(0, 5)}</span>
-                      <span className="text-sm text-gray-400">{durHHMM(s.time_start, s.time_end)}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <Badge status={s.status} />
+                <div className="flex justify-between items-center">
+                  <div className="font-bold" style={{ color: NAVY }}>{cust?.name}</div>
+                  <div className="flex items-center gap-1.5">
                     {asgn && asgn.employee_ids.length > 0 && (
                       <div className="flex gap-1">
                         {asgn.employee_ids.map(eid => {
                           const confirmed = asgn.payment_info?.find(p => p.employee_id === eid)?.confirmed
                           return (
-                            <div key={eid} style={{ width: 10, height: 10, borderRadius: '50%', background: confirmed ? '#10B981' : '#CBD5E0' }} />
+                            <div key={eid} style={{ width: 9, height: 9, borderRadius: '50%', background: confirmed ? '#10B981' : '#CBD5E0' }} />
                           )
                         })}
                       </div>
                     )}
+                    <Badge status={s.status} />
                   </div>
+                </div>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-bold text-sm" style={{ color: NAVY }}>{fmtDateShort(s.date)}</span>
+                    <span className="text-sm text-gray-500">{s.time_start.slice(0, 5)}</span>
+                    <span className="text-sm text-gray-400">{durHHMM(s.time_start, s.time_end)}</span>
+                  </div>
+                  {s.status === 'completed' && s.customer_amount != null && (
+                    <span className="text-xs text-gray-400 font-mono">{s.customer_amount}-{empCost}={profit}</span>
+                  )}
                 </div>
               </div>
             )

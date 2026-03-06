@@ -9,6 +9,7 @@ import type { Customer } from '@/types'
 
 const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: Partial<Customer>; onSave: (d: any) => void; onClose: () => void; onCreateShift?: () => void }) => {
   const [name, setName] = useState(initial?.name ?? '')
+  const [nameError, setNameError] = useState('')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [status, setStatus] = useState(initial?.status ?? 'active')
   const [address, setAddress] = useState(initial?.address ?? '')
@@ -18,12 +19,13 @@ const CustomerForm = ({ initial, onSave, onClose, onCreateShift }: { initial?: P
   const [comment, setComment] = useState(initial?.comment ?? '')
 
   const handleSubmit = () => {
+    if (!name.trim()) { setNameError('Name is required'); return }
     onSave({ name, phone, status, address, google_maps_link, price: Number(price) || 0, overhead: Math.round(Number(overhead) || 0), comment })
   }
 
   return (
     <div className="space-y-4">
-      <Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} placeholder="Customer name" /></Field>
+      <Field label="Name *" error={nameError}><Input value={name} onChange={e => { setName(e.target.value); if (nameError) setNameError('') }} placeholder="Customer name" /></Field>
       <Field label="Phone"><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555-0000" /></Field>
       <Field label="Status">
         <Select value={status} onChange={e => setStatus(e.target.value)}>

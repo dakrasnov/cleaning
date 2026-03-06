@@ -13,7 +13,7 @@ interface ShiftsState {
   error: string | null
   fetch: () => Promise<void>
   create: (data: Omit<Shift, 'id' | 'created_at'>) => Promise<Shift | null>
-  update: (id: string, data: Partial<Shift>) => Promise<void>
+  update: (id: string, data: Partial<Shift>) => Promise<boolean>
   remove: (id: string) => Promise<void>
 }
 
@@ -52,7 +52,7 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
   update: async (id, data) => {
     const prevShift = get().shifts.find(s => s.id === id)
     const { error } = await supabase.from('shifts').update(data).eq('id', id)
-    if (error) { set({ error: error.message }); return }
+    if (error) { set({ error: error.message }); return false }
     set({ shifts: get().shifts.map(s => s.id === id ? { ...s, ...data } : s) })
 
     // Accrual trigger: completing a shift creates accruals for assigned employees.
@@ -93,6 +93,13 @@ export const useShiftsStore = create<ShiftsState>((set, get) => ({
         await useCustomerPaymentsStore.getState().createForShift(id, shift.customer_id, amount)
       }
     }
+
+    // Update customer payment if shift was already completed and amount changed
+    if (prevShift?.status === 'completed' && (!data.status || data.status === 'completed') && data.customer_amount != null && data.customer_amount !== prevShift.customer_amount) {
+      await useCustomerPaymentsStore.getState().createForShift(id, prevShift.customer_id, data.customer_amount)
+    }
+
+    return true
   },
 
   remove: async (id) => {

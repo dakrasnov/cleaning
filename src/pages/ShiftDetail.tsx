@@ -255,7 +255,13 @@ export default function ShiftDetailPage() {
       {showEdit && <Modal title="Edit Shift" onClose={() => setShowEdit(false)}>
         <ShiftForm
           initial={shift}
-          onSave={async (data) => { await update(shift.id, data); await fetch(); toast.success('Shift updated'); setShowEdit(false) }}
+          onSave={async (data) => {
+            const ok = await update(shift.id, data)
+            if (!ok) { toast.error('Failed to save shift'); return }
+            await fetch()
+            toast.success('Shift updated')
+            setShowEdit(false)
+          }}
           onClose={() => setShowEdit(false)}
           onDelete={() => { setShowEdit(false); setShowDelete(true) }}
         />
